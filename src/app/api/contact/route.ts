@@ -10,6 +10,8 @@ interface Body {
   name?: string;
   email?: string;
   company?: string;
+  website?: string;
+  topic?: string;
   message?: string;
 }
 
@@ -23,6 +25,8 @@ export async function POST(req: NextRequest) {
   const name = (body.name ?? "").trim();
   const email = (body.email ?? "").trim();
   const company = (body.company ?? "").trim();
+  const website = (body.website ?? "").trim();
+  const topic = (body.topic ?? "").trim();
   const message = (body.message ?? "").trim();
 
   if (!name || !email || !message) {
@@ -39,11 +43,13 @@ export async function POST(req: NextRequest) {
   const res = await dispatcher.send({
     to: env.contactEmail,
     from: env.contactFromEmail, // verified sending domain for the contact form
-    subject: `New contact form submission from ${name}${company ? ` (${company})` : ""}`,
+    subject: `New contact message from ${name}${company ? ` (${company})` : ""}`,
     text: [
       `Name: ${name}`,
       `Email: ${email}`,
       `Company: ${company || "(none)"}`,
+      `Website: ${website || "(none)"}`,
+      `Topic: ${topic || "(none)"}`,
       "",
       "Message:",
       message

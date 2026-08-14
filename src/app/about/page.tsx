@@ -1,67 +1,76 @@
 import Image from "next/image";
-import { content } from "@/content";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Heart, Compass, Wrench } from "lucide-react";
 import Link from "next/link";
+import { content } from "@/content";
 
 export const metadata = { title: "About" };
 
 export default function AboutPage() {
   return (
-    <div className="container py-16 md:py-24">
-      <div className="mx-auto max-w-3xl text-center">
-        <Image
-          src="/logo.png"
-          alt=""
-          width={72}
-          height={72}
-          className="mx-auto mb-6 h-18 w-18 rounded-xl object-cover"
-        />
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight">{content.about.coreMessage}</h1>
-        <p className="mt-6 text-lg md:text-xl leading-relaxed text-muted-foreground">{content.about.body}</p>
-      </div>
-
-      <div className="mx-auto mt-16 grid max-w-4xl gap-6 md:grid-cols-3">
-        <PrincipleCard
-          icon={<Heart className="h-6 w-6" />}
-          title="Humans first"
-          body="We remove friction for real people. AI is a tool, not a religion."
-        />
-        <PrincipleCard
-          icon={<Compass className="h-6 w-6" />}
-          title="Grounded"
-          body="Every recommendation traces to evidence. No magic, no hand-waving."
-        />
-        <PrincipleCard
-          icon={<Wrench className="h-6 w-6" />}
-          title="Practical"
-          body="If AI isn't the right fit, we tell you — and save you the spend."
-        />
-      </div>
-
-      <div className="mx-auto mt-16 max-w-3xl text-center">
-        <p className="text-lg font-medium">Curious where AI fits in your business?</p>
-        <Button asChild variant="accent" size="lg" className="mt-4">
-          <Link href="/#scan">Start your free scan</Link>
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function PrincipleCard({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
-  return (
-    <Card>
-      <CardHeader>
-        <div className="mb-2 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-accent/15 text-accent">
-          {icon}
+    <div>
+      {/* Intro */}
+      <section className="border-b border-border/60">
+        <div className="container py-16 md:py-24">
+          <div className="max-w-3xl">
+            <Image
+              src="/logo.png"
+              alt=""
+              width={56}
+              height={56}
+              className="h-14 w-14 rounded-full object-cover ring-1 ring-accent/30"
+            />
+            <h1 className="mt-8 font-serif text-4xl md:text-5xl font-semibold tracking-tight">
+              {content.about.lead}
+            </h1>
+            <div className="mt-6 h-px w-16 bg-accent" aria-hidden="true" />
+            <p className="mt-6 text-lg md:text-xl leading-relaxed text-muted-foreground">
+              {content.about.body}
+            </p>
+          </div>
         </div>
-        <CardTitle className="text-xl">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <CardDescription className="text-base leading-relaxed">{body}</CardDescription>
-      </CardContent>
-    </Card>
+      </section>
+
+      {/* Principles */}
+      <section aria-labelledby="principles-heading" className="border-b border-border/60">
+        <div className="container py-16 md:py-20">
+          <div className="max-w-3xl">
+            <h2 id="principles-heading" className="font-serif text-2xl md:text-3xl font-semibold tracking-tight">
+              What we believe
+            </h2>
+            <ul className="mt-8 divide-y divide-border/70">
+              {content.about.principles.map((p) => (
+                <li key={p.title} className="py-5">
+                  <p className="font-serif text-lg font-semibold text-foreground">{p.title}</p>
+                  <p className="mt-1 text-muted-foreground leading-relaxed">{p.body}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Positioning */}
+      <section className="bg-primary text-primary-foreground">
+        <div className="container py-20 md:py-24 text-center">
+          <p className="mx-auto max-w-3xl font-serif text-2xl md:text-3xl font-medium leading-snug">
+            {content.about.positioning}
+          </p>
+        </div>
+      </section>
+
+      {/* Closing CTA */}
+      <section aria-label="Start your free review">
+        <div className="container py-16 md:py-24 text-center">
+          <p className="font-serif text-xl md:text-2xl font-medium text-foreground">
+            {content.about.closingCtaQuestion}
+          </p>
+          <Link
+            href={content.nav.cta.href}
+            className="mt-6 inline-flex h-12 items-center rounded-lg bg-accent px-7 text-base font-semibold text-accent-foreground shadow-sm transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            {content.about.closingCta}
+          </Link>
+        </div>
+      </section>
+    </div>
   );
 }

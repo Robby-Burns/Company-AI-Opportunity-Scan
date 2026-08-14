@@ -111,7 +111,7 @@ export function ClientSummaryPdf({ report }: { report: ClientReport }) {
         </Text>
 
         <Text style={styles.footer} fixed>
-          {content.orgName} · {content.contact.phone} · Generated {date}. Every claim in this report is traced to stored
+          {content.orgName} · {content.contactInfo.phone} · Generated {date}. Every claim in this report is traced to stored
           evidence; unsupported claims are omitted.
         </Text>
       </Page>

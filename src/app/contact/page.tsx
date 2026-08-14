@@ -1,51 +1,35 @@
+import Link from "next/link";
 import { content } from "@/content";
-import { env } from "@/lib/env";
 import { ContactForm } from "@/components/contact-form";
-import { Phone, Mail } from "lucide-react";
 
 export const metadata = { title: "Contact" };
 
 export default function ContactPage() {
-  const phoneHref = `tel:${content.contact.phone.replace(/[.\s]/g, "")}`;
-  const email = env.contactEmail;
-  const emailHref = `mailto:${email}`;
   return (
     <div className="container py-16 md:py-24">
       <div className="mx-auto max-w-2xl">
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Let&apos;s talk</h1>
-        <p className="mt-4 text-lg text-muted-foreground">
-          Questions about your scan, or want to book a deeper strategy session? Reach us directly or send a note below.
+        <h1 className="font-serif text-4xl md:text-5xl font-semibold tracking-tight">
+          {content.contact.heading}
+        </h1>
+        <div className="mt-6 h-px w-16 bg-accent" aria-hidden="true" />
+        <p className="mt-6 text-lg leading-relaxed text-muted-foreground">
+          {content.contact.body}
         </p>
-
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          <a
-            href={phoneHref}
-            className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:bg-accent/10 transition-colors"
-          >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-accent/15 text-accent">
-              <Phone className="h-5 w-5" />
-            </span>
-            <span>
-              <span className="block text-xs text-muted-foreground">Call</span>
-              <span className="font-medium">{content.contact.phone}</span>
-            </span>
-          </a>
-          <a
-            href={emailHref}
-            className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:bg-accent/10 transition-colors"
-          >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-accent/15 text-accent">
-              <Mail className="h-5 w-5" />
-            </span>
-            <span>
-              <span className="block text-xs text-muted-foreground">Email</span>
-              <span className="font-medium">{email}</span>
-            </span>
-          </a>
-        </div>
 
         <div className="mt-10">
           <ContactForm />
+        </div>
+
+        <div className="mt-10 rounded-xl border border-border bg-secondary/30 p-6 text-center">
+          <p className="text-base font-medium text-foreground">
+            {content.contact.secondaryQuestion}
+          </p>
+          <Link
+            href={content.nav.cta.href}
+            className="mt-4 inline-flex h-11 items-center rounded-lg bg-accent px-6 text-sm font-semibold text-accent-foreground shadow-sm transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            {content.contact.secondaryCta}
+          </Link>
         </div>
       </div>
     </div>

@@ -1,40 +1,301 @@
 /**
- * Editable copy (spec §10). Pure content — no behavior. Changing values here
- * does not require touching spec logic. Lifted into a single module so copy
- * changes don't force a logic redeploy beyond a normal build.
+ * Editable copy for the public Fox & Loom website.
+ *
+ * Pure content — no behavior. The brand line is "Humans helping humans." and
+ * must not be amended to add "with AI" / "through AI" / etc. (see brand guide).
+ *
+ * The internal Company Opportunity Scan machinery (API routes, the adaptive
+ * interview funnel) is intentionally NOT surfaced here. The Free AI Readiness
+ * Review is a simple, human-led intake that can later be wired into that
+ * workflow.
  */
 export const content = {
-  orgName: "Fox & Loom",
-  orgShortName: "Fox & Loom",
+  orgName: "The Fox & Loom",
+  orgNameCompact: "Fox & Loom",
+  brandLine: "Humans helping humans.",
 
-  hero: {
-    headline: "Humans Helping Humans With AI",
-    subheadline:
-      "Our process starts right here. Complete our interactive intake below—our AI assistant will ask a few tailored questions about your company. Once complete, you'll receive an instant, free high-level assessment of where your business stands on its AI journey. From there, you can book an in-depth strategy session with our human team, and we can build custom agents to tackle your specific bottlenecks."
+  nav: {
+    // The crest/wordmark links home; nav lists the three content pages.
+    items: [
+      { label: "About", href: "/about" },
+      { label: "Approach", href: "/approach" },
+      { label: "Contact", href: "/contact" }
+    ],
+    // The primary CTA scrolls to the hero review card on the homepage.
+    cta: { label: "Start Your Free AI Readiness Review", href: "/#review" }
   },
 
+  hero: {
+    headline: "Humans helping humans.",
+    lead: "We help companies figure out where AI and automation can actually make their work better.",
+    qualifier: "If AI isn't the answer, we'll tell you that too.",
+    cta: "Start Your Free AI Readiness Review",
+    ctaSupport: "Free. No obligation. No AI sales pitch."
+  },
+
+  review: {
+    heading: "Start Your Free AI Readiness Review",
+    body:
+      "Tell us a little about your company. We'll review what we can learn publicly, have a short conversation about how you work, and give you a practical assessment of your AI readiness.",
+    fields: {
+      name: "Name",
+      email: "Work Email",
+      company: "Company",
+      website: "Company Website"
+    },
+    cta: "Start My Free Review",
+    support: "Free. No obligation. No AI sales pitch.",
+    successTitle: "Thanks — we'll be in touch.",
+    successBody:
+      "We'll review what's publicly available, then reach out to schedule a short conversation about how you work. You'll get a practical read on your AI readiness — no pressure, no sales pitch."
+  },
+
+  painPoints: {
+    heading: "We help solve real pain points.",
+    items: [
+      {
+        title: "Wasted Time",
+        body: "Manual work, handoffs, and rework slow everything down."
+      },
+      {
+        title: "Disconnected Systems",
+        body: "Your tools don't talk to each other—or to your data."
+      },
+      {
+        title: "Hard to Scale",
+        body: "Growth creates more operational complexity instead of more capacity."
+      },
+      {
+        title: "Opportunity Leakage",
+        body: "Leads, follow-ups, and revenue opportunities fall through the cracks."
+      },
+      {
+        title: "Risk & Uncertainty",
+        body: "You're not sure what's possible—or whether it's worth the risk."
+      }
+    ]
+  },
+
+  philosophy: {
+    heading: ["We don't start with AI.", "We start with the work."],
+    body: "Before we recommend anything, we want to understand how your company actually operates.",
+    lines: [
+      "Sometimes AI is the answer.",
+      "Sometimes it's automation.",
+      "Sometimes it's a process problem.",
+      "And sometimes it's nothing at all."
+    ],
+    closer: "That's okay."
+  },
+
+  process: {
+    heading: "How it works.",
+    steps: [
+      {
+        n: "01",
+        tag: "Readiness",
+        tagNote: "Free",
+        title: "Start with the Free AI Readiness Review",
+        body: "A practical read on where you stand today—and whether a deeper look is worth it."
+      },
+      {
+        n: "02",
+        tag: "Assess",
+        tagNote: "Paid",
+        title: "Investigate what's actually there",
+        body: "We look at workflows, data, technology, people, business value, and risk."
+      },
+      {
+        n: "03",
+        tag: "Decide",
+        tagNote: "",
+        title: "Determine what's worth pursuing",
+        body: "We separate the real opportunities from the noise—and tell you when the answer is to do nothing."
+      },
+      {
+        n: "04",
+        tag: "Build",
+        tagNote: "",
+        title: "Build only when it makes sense",
+        body: "If the evidence supports it, we design, integrate, test, and deploy—with a 60-Day Deployment Assurance."
+      },
+      {
+        n: "05",
+        tag: "Own",
+        tagNote: "",
+        title: "You own the result",
+        body: "The delivered system and the Operations Diagnostic are yours."
+      }
+    ]
+  },
+
+  trust: {
+    heading: "We don't sell AI for the sake of AI.",
+    body: "Our job is to give you clarity.",
+    lines: [
+      "Sometimes that means AI.",
+      "Sometimes it means automation.",
+      "Sometimes it means fixing the process.",
+      "And sometimes it means doing nothing."
+    ],
+    closer: "We'd rather tell you that than sell you something you don't need."
+  },
+
+  finalCta: {
+    question: "Curious whether AI could actually help your business?",
+    lead: "Start with the Free AI Readiness Review.",
+    cta: "Start Your Free Review",
+    support: "We'll talk to a human. No obligation. No AI sales pitch."
+  },
+
+  about: {
+    lead: "Humans helping humans.",
+    body:
+      "We believe technology should make people's work better—not make companies more complicated. Fox & Loom works alongside the people actually doing the work.",
+    positioning:
+      "We're not an AI company trying to find problems for our AI to solve. We're problem solvers who know how to use AI when it makes sense.",
+    principles: [
+      {
+        title: "Start with people.",
+        body: "Technology should serve the people doing the work."
+      },
+      {
+        title: "Evidence before commitment.",
+        body: "We don't recommend building something simply because it's possible."
+      },
+      {
+        title: "AI isn't always the answer.",
+        body: "Sometimes it's AI. Sometimes it's automation. Sometimes it's a process change. Sometimes it's nothing."
+      },
+      {
+        title: "Be honest about uncertainty.",
+        body: "If we don't know yet, we'll tell you what we need to learn."
+      }
+    ],
+    closingCtaQuestion: "Want to see how we'd look at your company?",
+    closingCta: "Start Your Free AI Readiness Review"
+  },
+
+  approach: {
+    lead: "We don't start with technology.",
+    leadLine2: "We start with understanding.",
+    intro:
+      "Here's how we actually work, in plain English.",
+    plainSteps: [
+      {
+        title: "Listen",
+        body: "Talk to the people doing the work. Understand what actually happens, rather than what the process diagram says should happen."
+      },
+      {
+        title: "Gather evidence",
+        body: "Separate what we know from what we think."
+      },
+      {
+        title: "Find the uncertainty",
+        body: "Identify assumptions, unknowns, and unanswered questions."
+      },
+      {
+        title: "Decide",
+        body: "Determine whether there is something worth pursuing."
+      },
+      {
+        title: "Build only when it makes sense",
+        body: "If the evidence supports moving forward, design and build the appropriate solution."
+      },
+      {
+        title: "Make sure it works",
+        body: "Test, deploy, document, train, and provide the defined Deployment Assurance."
+      },
+      {
+        title: "Hand it over",
+        body: "The client owns the resulting system."
+      }
+    ],
+    framework: {
+      heading: "Hypothesis Delta",
+      lead: "Hypothesis Delta is how we make better decisions when uncertainty matters.",
+      deltas: ["Discover", "Define", "Develop", "Deliver"],
+      flow: [
+        "Problem Hypothesis",
+        "Value Hypothesis",
+        "Solution Hypothesis",
+        "Decision Hypothesis"
+      ],
+      gateLabel: "Evidence Gate",
+      deltasNote:
+        "The framework's four Deltas are: Discover → Define → Develop → Deliver."
+    },
+    atlas: {
+      heading: "Atlas is the AI facilitator behind our methodology.",
+      body:
+        "Atlas helps organize evidence, surface assumptions, challenge unsupported reasoning, and preserve decisions. Humans make the decisions."
+      }
+  },
+
+  contact: {
+    heading: "Let's talk.",
+    body:
+      "Whether you're curious about AI, already have a problem in mind, or simply don't know where to start, tell us a little about what's going on.",
+    fields: {
+      name: "Name",
+      company: "Company",
+      email: "Work Email",
+      website: "Website",
+      topicLabel: "What would you like to talk about?",
+      topicOther: "Tell us a little more",
+      cta: "Start the Conversation"
+    },
+    topics: [
+      "I'm curious whether AI could help",
+      "We have a workflow that's painful",
+      "Our systems don't work well together",
+      "We're already using AI and want to improve it",
+      "Something else"
+    ],
+    secondaryQuestion: "Prefer to start with something more structured?",
+    secondaryCta: "Start the Free AI Readiness Review",
+    successTitle: "Thanks for reaching out.",
+    successBody: "We read every message and reply within one business day."
+  },
+
+  footer: {
+    tagline: "Humans helping humans.",
+    note: "Helping companies figure out where AI and automation can actually make their work better."
+  },
+
+  contactInfo: {
+    phone: "509.302.9850",
+    // Read from env at runtime; documented fallback below.
+    emailEnvVar: "CONTACT_EMAIL",
+    emailFallback: "hello@foxandloom.com"
+  },
+
+  internalRecipient: {
+    // Recipient read from process.env at runtime. Do not hardcode in logic.
+    salesBriefToEnvVar: "SALES_BRIEF_TO",
+    salesBriefFromEnvVar: "SALES_BRIEF_FROM",
+    salesBriefToFallback: "marcus@foxandloom.com",
+    salesBriefFromFallback: "briefs@foxandloom.com",
+    note:
+      "Single recipient is a known v1 limitation, not a CRM integration. Fine for MVP; flag for follow-up before scale."
+  },
+
+  // ── Internal Company Opportunity Scan content ──────────────────────────
+  // These power the preserved automated funnel (/scan) and server libs
+  // (orchestrator, personas, PDF). They are intentionally NOT surfaced in the
+  // public marketing experience, which uses the human-led Free AI Readiness
+  // Review instead. Kept here so the internal machinery stays functional.
   scanStatusMessages: [
     "Analyzing website structure...",
     "Detecting software systems...",
     "Reviewing public signals...",
     "Almost there..."
   ],
-
-  scan: {
-    timerSeconds: 30,
-    steps: [
-      { id: "validate", label: "Verifying your request" },
-      { id: "scrape", label: "Researching your company" },
-      { id: "interview", label: "Tailoring questions" }
-    ]
-  },
-
   interview: {
     intro: "A few quick questions about your business",
     minQuestions: 8,
     maxQuestions: 12
   },
-
   perspectives: {
     intro: "Your company is being looked at from five different angles.",
     lenses: [
@@ -44,42 +305,6 @@ export const content = {
       { id: "business", label: "Business", prompt: "Where could AI create measurable value?" },
       { id: "risk", label: "Risk & People", prompt: "What could prevent it from working?" }
     ]
-  },
-
-  about: {
-    coreMessage: "Honest, grounded, practical AI advisory.",
-    body:
-      "We are humans helping humans. We're an easygoing team passionate about removing friction for real people inside growing businesses. We don't believe AI is a magic fix for everything, but we excel at finding the exact places where it truly moves the needle. And if AI turns out not to be the right solution for your problem? We'll tell you upfront—saving you from sinking money into tech you'll never use."
-  },
-
-  contact: {
-    phone: "509.302.9850",
-    // Read from env at runtime (spec §10); this is the documented fallback.
-    emailEnvVar: "CONTACT_EMAIL",
-    emailFallback: "hello@foxandloom.com"
-  },
-
-  internalRecipient: {
-    // Recipient read from process.env.SALES_BRIEF_TO at runtime (spec §10).
-    // Do not hardcode in logic. Documented default/example below.
-    salesBriefToEnvVar: "SALES_BRIEF_TO",
-    salesBriefFromEnvVar: "SALES_BRIEF_FROM",
-    salesBriefToFallback: "marcus@foxandloom.com",
-    salesBriefFromFallback: "briefs@foxandloom.com",
-    note:
-      "Single recipient is a known v1 limitation, not a CRM integration. Fine for MVP; flag for follow-up before scale."
-  },
-
-  nav: {
-    items: [
-      { label: "Home", href: "/" },
-      { label: "About", href: "/about" },
-      { label: "Contact", href: "/contact" }
-    ]
-  },
-
-  footer: {
-    tagline: "Honest, grounded, practical AI advisory."
   }
 } as const;
 

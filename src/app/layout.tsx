@@ -7,10 +7,11 @@ import { content } from "@/content";
 
 export const metadata: Metadata = {
   title: {
-    default: `${content.orgName} — Humans Helping Humans With AI`,
+    default: `${content.orgName} — ${content.brandLine}`,
     template: `%s — ${content.orgName}`
   },
-  description: content.about.body.slice(0, 155),
+  description:
+    "Fox & Loom helps companies figure out where AI and automation can actually make their work better. If AI isn't the answer, we'll tell you that too.",
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000")
 };
 

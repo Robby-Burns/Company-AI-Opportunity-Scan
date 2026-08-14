@@ -14,8 +14,8 @@ function required(name: string, fallback?: string): string {
 
 export const env = {
   appUrl: required("NEXT_PUBLIC_APP_URL", "http://localhost:3000"),
-  contactEmail: required(content.contact.emailEnvVar, content.contact.emailFallback),
-  contactFromEmail: required("CONTACT_FROM_EMAIL", content.contact.emailFallback),
+  contactEmail: required(content.contactInfo.emailEnvVar, content.contactInfo.emailFallback),
+  contactFromEmail: required("CONTACT_FROM_EMAIL", content.contactInfo.emailFallback),
   salesBriefTo: required(
     content.internalRecipient.salesBriefToEnvVar,
     content.internalRecipient.salesBriefToFallback
