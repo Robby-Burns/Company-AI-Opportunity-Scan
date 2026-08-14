@@ -9,6 +9,8 @@
  * Review is a simple, human-led intake that can later be wired into that
  * workflow.
  */
+import { pricing } from "@/content/pricing";
+
 export const content = {
   orgName: "The Fox & Loom",
   orgNameCompact: "Fox & Loom",
@@ -19,6 +21,7 @@ export const content = {
     items: [
       { label: "About", href: "/about" },
       { label: "Approach", href: "/approach" },
+      { label: "Pricing", href: "/pricing" },
       { label: "Contact", href: "/contact" }
     ],
     // The primary CTA scrolls to the hero review card on the homepage.
@@ -257,6 +260,11 @@ export const content = {
     tagline: "Humans helping humans.",
     note: "Helping companies figure out where AI and automation can actually make their work better."
   },
+
+  // Pricing content lives in src/content/pricing.ts (sourced from the Fox &
+  // Loom business/pricing document) and is attached here so the whole site
+  // reads from a single content model.
+  pricing,
 
   contactInfo: {
     phone: "509.302.9850",
