@@ -22,48 +22,52 @@ export const pricing = {
     body:
       "Before recommending that anything be built, we need to understand what's actually happening.",
     productName: "Company AI Readiness & Opportunity Assessment",
-    cards: [
-      {
-        name: "Small Company",
-        price: "$1,480",
-        fit: "For smaller organizations and relatively contained operational environments.",
-        includes: [
-          "Executive Overview",
-          "Current Operating Environment",
-          "Workflow investigation",
-          "Systems review",
-          "Data readiness",
-          "People & Process readiness",
-          "Business value",
-          "Risk",
-          "Opportunity analysis",
-          "Prioritization",
-          "Recommended next step",
-          "Remaining uncertainty"
-        ],
-        cta: { label: "Talk About an Assessment", href: "/contact" }
-      },
-      {
-        name: "Mid-Size / Complex",
-        price: "$3,480",
-        fit: "For larger organizations or more complex operational environments. The same core assessment dimensions, with greater depth and complexity appropriate to the engagement.",
-        includes: [
-          "Executive Overview",
-          "Current Operating Environment",
-          "Workflow investigation",
-          "Systems review",
-          "Data readiness",
-          "People & Process readiness",
-          "Business value",
-          "Risk",
-          "Opportunity analysis",
-          "Prioritization",
-          "Recommended next step",
-          "Remaining uncertainty"
-        ],
-        cta: { label: "Talk About an Assessment", href: "/contact" }
-      }
+    productBlurb:
+      "A full-company assessment of how ready your organization is for AI and automation—and what may be worth pursuing.",
+    bothFullCompany:
+      "Both are full-company assessments. The difference is depth and complexity, not company size.",
+    levels: [
+      { name: "Standard", price: "$1,480" },
+      { name: "Comprehensive", price: "$3,480" }
     ],
+    matrix: {
+      heading: "Two engagement levels.",
+      note:
+        "Every dimension below is covered by both levels. The only difference is depth and breadth.",
+      rows: [
+        { label: "Entire company", values: ["✓", "✓"] },
+        { label: "Operating environment", values: ["✓", "✓"] },
+        { label: "Workflow investigation", values: ["✓", "✓"] },
+        { label: "Systems review", values: ["✓", "✓"] },
+        { label: "Data readiness", values: ["✓", "✓"] },
+        { label: "People & process", values: ["✓", "✓"] },
+        { label: "Business value", values: ["✓", "✓"] },
+        { label: "Risk", values: ["✓", "✓"] },
+        { label: "Opportunity analysis", values: ["✓", "✓"] },
+        { label: "Prioritization", values: ["✓", "✓"] },
+        { label: "Depth / breadth", values: ["Standard", "Expanded"] }
+      ]
+    },
+    whatDifferent: {
+      heading: "What's the difference?",
+      body:
+        "Both options assess the entire company. The difference is the depth, breadth, and complexity of the assessment work required. We determine the appropriate level based on your operating environment—not simply your employee count.",
+      levels: [
+        {
+          name: "Standard",
+          price: "$1,480",
+          bestFor:
+            "Best when the company has a relatively straightforward operating environment, a manageable number of core workflows and systems, and limited organizational complexity."
+        },
+        {
+          name: "Comprehensive",
+          price: "$3,480",
+          bestFor:
+            "Best when the company has more complex or interconnected workflows, multiple operational areas, more systems/data dependencies, multiple locations, or greater organizational complexity requiring additional investigation."
+        }
+      ]
+    },
+    cta: { label: "Talk About an Assessment", href: "/contact" },
     credit: {
       question: "Decide to build?",
       headline: "50% of your assessment fee is credited toward implementation.",

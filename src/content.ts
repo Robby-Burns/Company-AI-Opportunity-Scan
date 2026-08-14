@@ -214,10 +214,24 @@ export const content = {
       lead: "Hypothesis Delta is how we make better decisions when uncertainty matters.",
       deltas: ["Discover", "Define", "Develop", "Deliver"],
       flow: [
-        "Problem Hypothesis",
-        "Value Hypothesis",
-        "Solution Hypothesis",
-        "Decision Hypothesis"
+        "Problem Hypothesis: What problem do we believe we're solving?\n" +
+          "Our best evidence-based explanation of who is experiencing the problem, what is happening, and why it matters.\n" +
+          "We don't assume the problem is real just because someone says it is. We test our understanding against customer evidence and observation.\n\n" +
+          "In plain English: Are we solving a real problem, for the right people?",
+        "Value Hypothesis: What value do we believe solving the problem will create?\n" +
+          "Our hypothesis about what will improve if we solve the problem—for the customer, the business, or both.\n\n" +
+          "This gives us something measurable to validate rather than simply assuming that solving a problem automatically creates value.\n\n" +
+          "In plain English: If we solve this problem, will it actually matter?",
+        "Solution Hypothesis: What do we believe could solve the problem and create the expected value?\n" +
+          "Our best evidence-based explanation of how we will address the problem and create value.\n\n" +
+          "In plain English: How will we solve this problem, and what will it take to make it work?",
+        "Decision Hypothesis: What do we believe we should do based on the evidence?\n" +
+          "Our evidence-based hypothesis about the decision the team should make after validation.\n\n" +
+          "At Delta 4, the team evaluates the evidence and determines whether to:\n\n" +
+          "Persevere — continue with the direction\n" +
+          "Pivot — change the direction based on what we learned\n" +
+          "Kill — stop pursuing the idea\n\n" +
+          "In plain English: Now that we've learned something, what should we do?"
       ],
       gateLabel: "Evidence Gate",
       deltasNote:
@@ -227,7 +241,7 @@ export const content = {
       heading: "Atlas is the AI facilitator behind our methodology.",
       body:
         "Atlas helps organize evidence, surface assumptions, challenge unsupported reasoning, and preserve decisions. Humans make the decisions."
-      }
+    }
   },
 
   contact: {
@@ -270,7 +284,7 @@ export const content = {
     phone: "509.302.9850",
     // Read from env at runtime; documented fallback below.
     emailEnvVar: "CONTACT_EMAIL",
-    emailFallback: "hello@foxandloom.com"
+    emailFallback: "burns.robby@outlook.com"
   },
 
   internalRecipient: {

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { content } from "@/content";
 
@@ -9,54 +8,115 @@ export function AssessmentSection() {
   return (
     <section aria-labelledby="assessment-heading" className="border-b border-border/60">
       <div className="container py-16 md:py-20">
+        {/* Heading + product */}
         <div className="max-w-3xl">
           <h2 id="assessment-heading" className="font-serif text-3xl md:text-4xl font-semibold tracking-tight">
             {p.heading}
           </h2>
           <p className="mt-4 text-lg leading-relaxed text-muted-foreground">{p.body}</p>
+          <p className="mt-6 font-serif text-xl font-semibold text-foreground">{p.productName}</p>
+          <p className="mt-2 text-base leading-relaxed text-muted-foreground">{p.productBlurb}</p>
         </div>
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-2">
-          {p.cards.map((card) => (
-            <Card key={card.name} className="flex flex-col">
-              <CardContent className="flex flex-1 flex-col p-6 md:p-8">
-                <p className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  {card.name}
-                </p>
-                <p className="mt-3 font-serif text-4xl font-semibold tracking-tight text-foreground">
-                  {card.price}
-                </p>
-                <p className="mt-2 text-sm font-medium text-foreground/80">{p.productName}</p>
-                <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{card.fit}</p>
+        {/* Prominent: both are full-company assessments */}
+        <p className="mt-8 rounded-lg border border-accent/40 bg-accent/5 px-5 py-4 text-base font-medium text-foreground md:max-w-3xl">
+          {p.bothFullCompany}
+        </p>
 
-                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.14em] text-foreground">
-                  Included
-                </p>
-                <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-                  {card.includes.map((item) => (
-                    <li key={item} className="flex gap-2.5">
-                      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-accent" aria-hidden="true" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
+        {/* Matrix: two engagement levels */}
+        <div className="mt-12 max-w-3xl">
+          <h3 className="font-serif text-xl md:text-2xl font-semibold tracking-tight">
+            {p.matrix.heading}
+          </h3>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{p.matrix.note}</p>
 
-                <div className="mt-8 pt-2">
-                  <Button asChild variant="accent" className="w-full">
-                    <Link href={card.cta.href}>{card.cta.label}</Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          <div className="mt-6 overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <caption className="sr-only">Assessment engagement levels — Standard and Comprehensive</caption>
+              <thead>
+                <tr className="border-b border-border">
+                  <th scope="col" className="py-3 pr-4 text-left font-semibold text-foreground">
+                    &nbsp;
+                  </th>
+                  <th
+                    scope="col"
+                    className="py-3 px-3 text-left font-semibold text-accent align-bottom w-40"
+                  >
+                    {p.levels[0].name}
+                  </th>
+                  <th
+                    scope="col"
+                    className="py-3 px-3 text-left font-semibold text-accent align-bottom w-40"
+                  >
+                    {p.levels[1].name}
+                  </th>
+                </tr>
+                <tr className="border-b border-border/70">
+                  <th scope="row" className="py-2 pr-4 text-left font-medium text-muted-foreground">
+                    Price
+                  </th>
+                  <td className="py-2 px-3 font-serif text-lg font-semibold text-foreground">
+                    {p.levels[0].price}
+                  </td>
+                  <td className="py-2 px-3 font-serif text-lg font-semibold text-foreground">
+                    {p.levels[1].price}
+                  </td>
+                </tr>
+              </thead>
+              <tbody>
+                {p.matrix.rows.map((row, idx) => (
+                  <tr key={row.label} className={idx % 2 === 0 ? "bg-background/40" : ""}>
+                    <th scope="row" className="py-3 pr-4 text-left font-medium text-foreground">
+                      {row.label}
+                    </th>
+                    {row.values.map((v, vi) => (
+                      <td key={vi} className="py-3 px-3 text-muted-foreground align-top">
+                        {v}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* What's the difference? */}
+        <div className="mt-12 max-w-3xl">
+          <h3 className="font-serif text-xl md:text-2xl font-semibold tracking-tight">
+            {p.whatDifferent.heading}
+          </h3>
+          <p className="mt-4 text-base leading-relaxed text-muted-foreground">
+            {p.whatDifferent.body}
+          </p>
+          <dl className="mt-8 grid gap-6 md:grid-cols-2">
+            {p.whatDifferent.levels.map((lvl) => (
+              <div key={lvl.name} className="rounded-xl border border-border bg-card p-5">
+                <p className="text-sm font-semibold uppercase tracking-[0.14em] text-accent">
+                  {lvl.name}
+                </p>
+                <p className="mt-2 font-serif text-2xl font-semibold tracking-tight text-foreground">
+                  {lvl.price}
+                </p>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{lvl.bestFor}</p>
+              </div>
+            ))}
+          </dl>
+        </div>
+
+        {/* CTA */}
+        <div className="mt-10 md:max-w-3xl">
+          <Button asChild variant="accent" size="lg">
+            <Link href={p.cta.href}>{p.cta.label}</Link>
+          </Button>
         </div>
 
         {/* Assessment credit */}
-        <div className="mt-8 rounded-xl border border-accent/40 bg-accent/5 p-6 md:p-8">
+        <div className="mt-8 rounded-xl border border-accent/40 bg-accent/5 p-6 md:p-8 md:max-w-3xl">
           <p className="font-serif text-xl md:text-2xl font-semibold text-foreground">
             <span className="text-accent">{p.credit.question}</span> {p.credit.headline}
           </p>
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground md:max-w-2xl">{p.credit.body}</p>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{p.credit.body}</p>
         </div>
       </div>
     </section>
