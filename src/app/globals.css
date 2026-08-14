@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ───────────────────────────────────────────────────────────
+   Brand palette — derived from logo.png (spec §9.1).
+   Navy/indigo primary: #2F3359 (dark #202246, light #4A4F7A)
+   Gold/amber accent:   #BF9036 (light #F0D070, deep #8A6A1F)
+   Warm cream surface:  #FAF7F0
+   Tokens are HSL components (space-separated) so Tailwind can
+   apply opacity modifiers (shadcn/ui convention).
+   ─────────────────────────────────────────────────────────── */
+@layer base {
+  :root {
+    --background: 42 40% 96%;          /* warm cream #FAF7F0 */
+    --foreground: 230 30% 18%;          /* deep navy ink */
+
+    --card: 0 0% 100%;
+    --card-foreground: 230 30% 18%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 230 30% 18%;
+
+    --primary: 233 33% 27%;             /* #2F3359 navy */
+    --primary-foreground: 42 40% 96%;
+
+    --secondary: 233 25% 90%;
+    --secondary-foreground: 233 33% 27%;
+
+    --muted: 230 14% 92%;
+    --muted-foreground: 230 10% 40%;
+
+    --accent: 38 56% 48%;               /* #BF9036 gold */
+    --accent-foreground: 230 30% 12%;
+
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 230 14% 86%;
+    --input: 230 14% 84%;
+    --ring: 233 33% 27%;
+
+    --radius: 0.75rem;
+
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: Georgia, "Times New Roman", serif;
+  }
+
+  .dark {
+    /* Light-first design (spec §9.1: friendly/human). Dark mode kept minimal. */
+    --background: 233 33% 14%;
+    --foreground: 42 40% 96%;
+    --card: 233 28% 18%;
+    --card-foreground: 42 40% 96%;
+    --popover: 233 28% 18%;
+    --popover-foreground: 42 40% 96%;
+    --primary: 38 56% 52%;
+    --primary-foreground: 233 33% 14%;
+    --secondary: 233 20% 26%;
+    --secondary-foreground: 42 40% 96%;
+    --muted: 233 20% 26%;
+    --muted-foreground: 230 12% 70%;
+    --accent: 38 56% 52%;
+    --accent-foreground: 233 33% 14%;
+    --border: 233 20% 30%;
+    --input: 233 20% 30%;
+    --ring: 38 56% 52%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "cv01";
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+  /* Skip link for keyboard users (WCAG 2.4.1). */
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50
+           focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground;
+  }
+}
+
+@layer utilities {
+  .bg-brand-gradient {
+    background-image: linear-gradient(135deg, #2f3359 0%, #4a4f7a 50%, #2f3359 100%);
+  }
+  .text-gradient-gold {
+    background: linear-gradient(90deg, #bf9036 0%, #f0d070 50%, #bf9036 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .shimmer-bg {
+    background: linear-gradient(90deg, hsl(var(--muted)) 0%, hsl(var(--accent) / 0.25) 50%, hsl(var(--muted)) 100%);
+    background-size: 200% 100%;
+  }
+}
+
+/* Respect reduced motion (WCAG 2.3.3, AAA-leaning; cheap to include). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
