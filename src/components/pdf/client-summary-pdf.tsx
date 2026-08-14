@@ -25,6 +25,10 @@ const styles = StyleSheet.create({
   body: { fontSize: 10.5, lineHeight: 1.5 },
   example: { fontSize: 10, color: "#5A5D6A", marginTop: 4, fontStyle: "italic" },
   ev: { fontSize: 8, color: "#8A6A1F", marginTop: 6 },
+  perspective: { borderWidth: 1, borderColor: "#E4E1DA", borderRadius: 6, padding: 10, marginBottom: 8, backgroundColor: "#FFFFFF" },
+  perspectiveTitle: { fontSize: 11, fontFamily: "Helvetica-Bold", color: "#2F3359", marginBottom: 3 },
+  perspectiveBody: { fontSize: 10, lineHeight: 1.45, color: "#3A3D4A" },
+  perspectiveUncertainty: { fontSize: 9.5, color: "#6B6F7A", marginTop: 2, fontStyle: "italic" },
   note: { fontSize: 10, color: "#5A5D6A", marginBottom: 4 },
   footer: { position: "absolute", bottom: 28, left: 48, right: 48, fontSize: 8, color: "#9A9DA6", textAlign: "center", borderTopWidth: 1, borderTopColor: "#E4E1DA", paddingTop: 8 }
 });
@@ -72,6 +76,21 @@ export function ClientSummaryPdf({ report }: { report: ClientReport }) {
             </View>
           ))
         )}
+
+        {report.perspectives.length > 0 ? (
+          <View break={report.areas.length >= 3}>
+            <Text style={styles.sectionTitle}>What each perspective sees</Text>
+            {report.perspectives.map((p, i) => (
+              <View key={i} style={styles.perspective}>
+                <Text style={styles.perspectiveTitle}>{p.title}</Text>
+                <Text style={styles.perspectiveBody}>{p.summary}</Text>
+                {p.opportunity ? <Text style={styles.perspectiveBody}>Opportunity: {p.opportunity}</Text> : null}
+                {p.uncertainty ? <Text style={styles.perspectiveUncertainty}>Still unknown: {p.uncertainty}</Text> : null}
+                {p.evidenceIds.length > 0 ? <Text style={styles.ev}>Evidence: {p.evidenceIds.join(", ")}</Text> : null}
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {report.notReadyNotes.length > 0 ? (
           <View>

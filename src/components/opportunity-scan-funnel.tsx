@@ -17,6 +17,7 @@ interface Question {
   text: string;
   kind?: "short" | "long" | "choice";
   choices?: string[];
+  lens?: string;
 }
 
 type ProgressEvent =
@@ -344,6 +345,19 @@ export function OpportunityScanFunnel() {
               </Badge>
             </div>
             <Progress value={(st.asked / st.max) * 100} className="mt-2" aria-label="Interview progress" />
+            {/* Five-perspectives hook (spec §9.1 tone: human, not a questionnaire) */}
+            {st.asked === 0 && (
+              <div className="mt-4 rounded-lg border border-border bg-secondary/30 p-4">
+                <p className="text-sm font-medium">{content.perspectives.intro}</p>
+                <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {content.perspectives.lenses.map((l) => (
+                    <li key={l.id} className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">{l.label}:</span> {l.prompt}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             {questionLoading ? (
@@ -352,6 +366,11 @@ export function OpportunityScanFunnel() {
               </p>
             ) : st.question ? (
               <form onSubmit={submitAnswer} className="space-y-4">
+                {st.question.lens && (
+                  <Badge variant="outline" className="mb-1">
+                    {content.perspectives.lenses.find((l) => l.id === st.question?.lens)?.label ?? st.question.lens} perspective
+                  </Badge>
+                )}
                 <fieldset className="space-y-3">
                   <legend className="text-base font-medium leading-relaxed">{st.question.text}</legend>
                   {st.question.kind === "choice" && st.question.choices ? (

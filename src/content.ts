@@ -35,6 +35,17 @@ export const content = {
     maxQuestions: 12
   },
 
+  perspectives: {
+    intro: "Your company is being looked at from five different angles.",
+    lenses: [
+      { id: "operations", label: "Operations", prompt: "Where is work getting stuck?" },
+      { id: "systems", label: "Technology", prompt: "Where are your systems creating friction?" },
+      { id: "data", label: "Data", prompt: "What information could you actually use?" },
+      { id: "business", label: "Business", prompt: "Where could AI create measurable value?" },
+      { id: "risk", label: "Risk & People", prompt: "What could prevent it from working?" }
+    ]
+  },
+
   about: {
     coreMessage: "Honest, grounded, practical AI advisory.",
     body:

@@ -54,6 +54,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     company: report.company,
     headline: report.headline,
     areas: report.areas,
+    perspectives: report.perspectives,
     notReadyNotes: report.notReadyNotes,
     evidenceIds: report.evidenceIds,
     generatedAt: report.generatedAt,

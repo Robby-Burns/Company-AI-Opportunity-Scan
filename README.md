@@ -88,6 +88,12 @@ in-memory store; a real DB is a flagged follow-up before scale (see
   **omitted, not guessed** (enforced in `lib/synthesis.ts`).
 - **Interview bounds**: hard stop at 12 questions, can finish early at 8
   (`lib/orchestrator.ts`).
+- **Multi-perspective interview**: a Coordinator selects 2–3 specialist
+  lenses per turn (Operations, Technology, Data, Business, Risk & People);
+  personas generate candidate questions in parallel; deterministic scoring
+  picks the best. Personas retain perspective state across the interview,
+  which becomes the report's "What each perspective sees" section
+  (`lib/interview/`). Modeled on the paid Deep Assessment dimensions.
 - **Graceful degradation**: scraper failure/timeout proceeds to the interview
   with partial evidence; synthesis failure falls back to a minimal
   evidence-backed report.

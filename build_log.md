@@ -3,6 +3,86 @@
 Living log of material implementation decisions (per spec §12.3). Routine
 choices (file layout, names) are not logged here. Newest entries at the top.
 
+## 2026-08-14 — Multi-perspective interview architecture (coordinator + specialist personas)
+
+Replaced the single-agent adaptive interview loop with a multi-perspective
+architecture modeled on the six dimensions of the paid Deep Assessment
+(Workflow, Technology, Data, Business Value, Risk). This is a product/sales
+decision, not a cost-optimization one: the free scan's job is to make the
+prospect think "they actually understand my business," not to ask a generic
+adaptive questionnaire. The extra inference cost is acceptable for a
+lead-gen mechanism feeding a $1,480–$3,480 assessment.
+
+### Architecture (spec §7.2 — framework choice left to implementer)
+Per turn:
+1. **Coordinator** (one LLM call) — reviews evidence + answers + per-lens
+   perspective states, selects the 2–3 lenses with the highest current
+   information value, assigns scoring weights, and may signal `complete`.
+2. **Specialist personas** (2–3 parallel LLM calls) — each reviews the current
+   context + its own prior perspective and proposes a candidate question, an
+   updated perspective, and a self-scored rubric. Lenses: Operations, Systems,
+   Data, Business, Risk.
+3. **Deterministic scoring** (no LLM) — weighted sum picks the best candidate;
+   ties break by the coordinator's lens order. No second coordinator call per
+   turn (per the product lead's adjustment).
+
+### Persona perspective memory
+Each lens keeps `beliefs / uncertainties / potentialOpportunity / evidenceRefs`
+across the whole interview, stored in `InterviewState.perspectives`. When a
+lens is re-consulted it receives its prior state; otherwise it persists
+unchanged. At synthesis, the final perspectives become the report's "What each
+perspective sees" section (e.g. "Operations Perspective: ..."), making the
+report feel like a consulting product rather than a chatbot transcript.
+
+### Bounds (unchanged invariant)
+8–12 questions, hard stop at max enforced in code (the model cannot exceed it).
+Goal reframed: the FEWEST questions necessary to establish a compelling
+opportunity hypothesis — the coordinator signals `complete` at >= min when a
+hypothesis is established (HD: reduce uncertainty with the smallest effort).
+
+### Graceful degradation
+Coordinator failure → scripted fallback questions. All-persona failure →
+fallback. The interview always completes (bounded) and the report always
+generates. No fake readiness score (per the existing methodology: "No maturity
+score. No six-framework matrix").
+
+### Report changes (blast radius)
+- `ClientReport` and `SalesBrief` gained a `perspectives: PerspectiveView[]`
+  field; `OpportunityArea` gained an optional `lens`.
+- Synthesis prompt now consumes the interview's perspective states and asks for
+  per-lens views; unsupported perspectives are omitted (same evidence
+  invariant as areas).
+- PDF (`client-summary-pdf.tsx`) renders a "What each perspective sees"
+  section.
+- Email brief (text + HTML) includes the perspectives.
+- Report route JSON exposes `perspectives`.
+
+### UI hook (spec §9.1)
+The interview step shows a "Your company is being looked at from five
+different angles" panel on the first question, listing all five lenses with
+their framing prompts. Each question shows a lens badge (e.g. "Operations
+perspective") so the prospect feels the multi-perspective assessment.
+
+### Files
+- New: `src/lib/interview/types.ts`, `personas.ts`, `coordinator.ts`.
+- Rewritten: `src/lib/orchestrator.ts` (public API preserved: `nextQuestion`,
+  `ingestResponse`, `initInterview`, `isInterviewFinished`, `clearInterviewState`,
+  `getInterviewState` all unchanged signatures).
+- Updated: `src/lib/synthesis.ts`, `src/content.ts` (perspectives copy),
+  `src/components/opportunity-scan-funnel.tsx`, `src/components/pdf/client-summary-pdf.tsx`,
+  `src/lib/email.ts`, `src/app/api/report/[id]/route.ts`.
+- Removed: the old single-agent `SYSTEM_PROMPT` and inline `nextQuestion` body.
+
+### Tests
+- `orchestrator-synthesis.test.ts` rewritten to mock the multi-call pattern
+  (1 coordinator + N personas per turn). New tests: coordinator selects lenses,
+  scoring picks best, novelty wins under equal weights, perspective state
+  persists across turns, question carries its lens, perspectives survive
+  synthesis with evidence backing, unsupported perspectives dropped.
+- Preserved: hard-stop at 12, early finish via coordinator `complete`, fallback
+  on coordinator failure, fallback on all-persona failure, evidence invariant.
+- Suite: 42 -> 46 tests, all green; typecheck/lint/build all green.
+
 ## 2026-08-14 — Railway deployment hardening
 
 Reviewed the codebase against the deployment target (Railway: long-running Node,

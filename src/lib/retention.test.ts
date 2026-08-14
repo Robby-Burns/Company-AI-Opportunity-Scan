@@ -85,6 +85,7 @@ describe("Retention sweep — per-class (spec §6.5)", () => {
         website: "https://acme.com",
         headline: "h",
         areas: [],
+        perspectives: [],
         notReadyNotes: [],
         evidenceIds: [],
         generatedAt: now

@@ -109,6 +109,16 @@ function renderBriefText(b: SalesBrief): string {
       `   Evidence: ${a.evidenceIds.join(", ") || "(none)"}`
     ]),
     ``,
+    `Perspectives:`,
+    ...(b.perspectives.length
+      ? b.perspectives.flatMap((p) => [
+          `- ${p.title}: ${p.summary}`,
+          ...(p.opportunity ? [`    Opportunity: ${p.opportunity}`] : []),
+          ...(p.uncertainty ? [`    Still unknown: ${p.uncertainty}`] : []),
+          `    Evidence: ${p.evidenceIds.join(", ") || "(none)"}`
+        ])
+      : ["- (none)"]),
+    ``,
     `Gaps / follow-ups:`,
     ...(b.gaps.length ? b.gaps.map((g) => `- ${g}`) : ["- (none)"]),
     ``,
@@ -136,12 +146,22 @@ function renderBriefHtml(b: SalesBrief): string {
     .join("");
   const gaps = b.gaps.map((g) => `<li>${esc(g)}</li>`).join("") || "<li>(none)</li>";
   const qs = b.recommendedQuestions.map((q) => `<li>${esc(q)}</li>`).join("") || "<li>(none)</li>";
+  const perspectives = b.perspectives
+    .map(
+      (p) =>
+        `<li><strong>${esc(p.title)}</strong><br/>${esc(p.summary)}` +
+        (p.opportunity ? `<br/><em>Opportunity:</em> ${esc(p.opportunity)}` : "") +
+        (p.uncertainty ? `<br/><em>Still unknown:</em> ${esc(p.uncertainty)}` : "") +
+        `<br/><em>Evidence:</em> ${esc(p.evidenceIds.join(", ") || "(none)")}</li>`
+    )
+    .join("") || "<li>(none)</li>";
   return [
     `<!doctype html><html><body style="font-family:system-ui,sans-serif;line-height:1.5">`,
     `<h2>Fox ${ENT.amp} Loom — Sales Intelligence Brief</h2>`,
     `<p>Company: <strong>${esc(b.company)}</strong> ${ENT.middot} ${esc(b.website)}<br/>Contact: ${esc(b.contactEmail)} ${ENT.middot} ${new Date(b.generatedAt).toISOString()}</p>`,
     `<h3>Summary</h3><p>${esc(b.summary)}</p>`,
     `<h3>Opportunity areas (unranked)</h3><ul>${areas}</ul>`,
+    `<h3>Perspectives</h3><ul>${perspectives}</ul>`,
     `<h3>Gaps / follow-ups</h3><ul>${gaps}</ul>`,
     `<h3>Recommended first-call questions</h3><ul>${qs}</ul>`,
     `<p><em>Evidence ids used:</em> ${esc(b.evidenceIds.join(", ") || "(none)")}</p>`,
