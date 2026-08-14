@@ -27,7 +27,7 @@ export const content = {
 
   hero: {
     headline: "Humans helping humans.",
-    lead: "We help companies figure out where AI and automation can actually make their work better.",
+    lead: "We help companies figure out where AI can actually make their work better.",
     qualifier: "If AI isn't the answer, we'll tell you that too.",
     cta: "Start Your Free AI Readiness Review",
     ctaSupport: "Free. No obligation. No AI sales pitch."
@@ -59,29 +59,24 @@ export const content = {
       },
       {
         title: "Disconnected Systems",
-        body: "Your tools don't talk to each other—or to your data."
+        body: "Your tools don't talk to each other or to your data."
       },
       {
-        title: "Hard to Scale",
-        body: "Growth creates more operational complexity instead of more capacity."
+        title: "The Boring Stuff",
+        body: "If a task is too tedious, it's a sign that something needs to change."
       },
       {
-        title: "Opportunity Leakage",
-        body: "Leads, follow-ups, and revenue opportunities fall through the cracks."
+        title: "Opportunity Lost",
+        body: "Leads, follow-ups, and revenue opportunities falling through the cracks."
       },
-      {
-        title: "Risk & Uncertainty",
-        body: "You're not sure what's possible—or whether it's worth the risk."
-      }
     ]
   },
 
   philosophy: {
-    heading: ["We don't start with AI.", "We start with the work."],
+    heading: ["We don't start with AI.", "We start with the pain points."],
     body: "Before we recommend anything, we want to understand how your company actually operates.",
     lines: [
       "Sometimes AI is the answer.",
-      "Sometimes it's automation.",
       "Sometimes it's a process problem.",
       "And sometimes it's nothing at all."
     ],
@@ -96,7 +91,7 @@ export const content = {
         tag: "Readiness",
         tagNote: "Free",
         title: "Start with the Free AI Readiness Review",
-        body: "A practical read on where you stand today—and whether a deeper look is worth it."
+        body: "A practical read on where you stand today and whether a deeper look is worth it."
       },
       {
         n: "02",
@@ -110,21 +105,21 @@ export const content = {
         tag: "Decide",
         tagNote: "",
         title: "Determine what's worth pursuing",
-        body: "We separate the real opportunities from the noise—and tell you when the answer is to do nothing."
+        body: "We separate the real opportunities from the noise and tell you when the answer is to do nothing."
       },
       {
         n: "04",
         tag: "Build",
-        tagNote: "",
+        tagNote: "Paid",
         title: "Build only when it makes sense",
-        body: "If the evidence supports it, we design, integrate, test, and deploy—with a 60-Day Deployment Assurance."
+        body: "If the evidence supports it, we design, integrate, test, and deploy.  Each system comes with a 60-Day Deployment Assurance."
       },
       {
         n: "05",
         tag: "Own",
         tagNote: "",
         title: "You own the result",
-        body: "The delivered system and the Operations Diagnostic are yours."
+        body: "The delivered system are yours."
       }
     ]
   },
@@ -151,7 +146,7 @@ export const content = {
   about: {
     lead: "Humans helping humans.",
     body:
-      "We believe technology should make people's work better—not make companies more complicated. Fox & Loom works alongside the people actually doing the work.",
+      "We believe technology should make people's work better, not make companies more complicated. Fox & Loom works alongside the people actually doing the work.",
     positioning:
       "We're not an AI company trying to find problems for our AI to solve. We're problem solvers who know how to use AI when it makes sense.",
     principles: [
@@ -165,7 +160,7 @@ export const content = {
       },
       {
         title: "AI isn't always the answer.",
-        body: "Sometimes it's AI. Sometimes it's automation. Sometimes it's a process change. Sometimes it's nothing."
+        body: "Sometimes it's AI. Sometimes it's a process change. Sometimes it's nothing."
       },
       {
         title: "Be honest about uncertainty.",
@@ -274,8 +269,8 @@ export const content = {
     // Recipient read from process.env at runtime. Do not hardcode in logic.
     salesBriefToEnvVar: "SALES_BRIEF_TO",
     salesBriefFromEnvVar: "SALES_BRIEF_FROM",
-    salesBriefToFallback: "marcus@foxandloom.com",
-    salesBriefFromFallback: "briefs@foxandloom.com",
+    salesBriefToFallback: "burns.robby@outlook.com",
+    salesBriefFromFallback: "burns.robby@outlook.com",
     note:
       "Single recipient is a known v1 limitation, not a CRM integration. Fine for MVP; flag for follow-up before scale."
   },
