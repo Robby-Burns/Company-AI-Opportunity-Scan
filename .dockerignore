@@ -1,0 +1,40 @@
+# Build artifacts
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# Dependencies (re-installed inside the image)
+node_modules/
+
+# Env / secrets — never bake into an image
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+playwright-install.log
+
+# Playwright runtime artifacts
+playwright-report/
+test-results/
+.blob/
+playwright/.cache/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+.git/
+.gitignore
+
+# Python (legacy placeholder, not used by the app)
+.venv/
+__pycache__/
+*.pyc
+
+# Misc
+dev.log

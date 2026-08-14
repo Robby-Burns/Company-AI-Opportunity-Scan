@@ -28,3 +28,13 @@ export function getSynthesisPromise(id: string): Promise<SynthResult> | undefine
 export function getClientReport(id: string): ClientReport | undefined {
   return REPORTS.get(id);
 }
+
+/**
+ * Clear synthesis state for a scan (called by the retention sweep when a scan
+ * is fully expired). Prevents unbounded growth of the REPORTS map on a
+ * long-running server. The SYNTH map already self-cleans after 5min.
+ */
+export function clearSynthesisState(id: string): void {
+  SYNTH.delete(id);
+  REPORTS.delete(id);
+}

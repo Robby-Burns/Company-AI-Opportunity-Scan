@@ -140,10 +140,10 @@ export async function ingestResponse(scanId: string, questionId: string, answer:
   if (!st) return false;
   const scan = getScan(scanId);
   if (!scan) return false;
-  // Sanitize BEFORE it enters the pipeline (spec §6.4).
-  const sanitized = sanitize(answer, { tag: `answer.${questionId}` }).text;
-  recordAnswer(scanId, questionId, answer); // store raw for display, post-sanitize for LLM
-  void sanitized;
+  // Store the raw answer for display; it is re-sanitized at LLM-consumption
+  // time in sanitizeAnswers() (spec §6.4 — guardrails applied before the
+  // pipeline, not just at storage).
+  recordAnswer(scanId, questionId, answer);
   st.asked += 1;
   st.current = undefined;
   if (st.asked >= st.maxQuestions) st.finished = true;
@@ -161,6 +161,15 @@ export async function ingestResponse(scanId: string, questionId: string, answer:
 
 export function isInterviewFinished(scanId: string): boolean {
   return STATE.get(scanId)?.finished ?? false;
+}
+
+/**
+ * Clear interview state for a scan (called by the retention sweep when a scan
+ * is fully expired). Prevents unbounded growth of the STATE map on a
+ * long-running server.
+ */
+export function clearInterviewState(scanId: string): void {
+  STATE.delete(scanId);
 }
 
 function summarizeEvidence(evidence: ReturnType<typeof listEvidence>): string {

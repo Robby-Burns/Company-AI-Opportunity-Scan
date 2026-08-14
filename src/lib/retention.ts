@@ -6,6 +6,8 @@
  * same thresholds.
  */
 import { allScans, deleteScan, purgeScrapedEvidence } from "@/lib/evidence/store";
+import { clearInterviewState } from "@/lib/orchestrator";
+import { clearSynthesisState } from "@/lib/synthesis-queue";
 import { env } from "@/lib/env";
 
 const SWEEP_INTERVAL_MS = 60 * 60 * 1000; // hourly
@@ -26,6 +28,10 @@ export function runRetentionSweep(now = Date.now()): { purgedScraped: number; de
       // Scraped window expired but answers still in window → drop scraped only.
       purgedScraped += purgeScrapedEvidence(s.id);
     } else if (now > s.answersExpireAt) {
+      // Fully expired — clear all derived state to prevent unbounded map
+      // growth on a long-running server, then delete the scan record.
+      clearInterviewState(s.id);
+      clearSynthesisState(s.id);
       deleteScan(s.id);
       deletedScans += 1;
     }

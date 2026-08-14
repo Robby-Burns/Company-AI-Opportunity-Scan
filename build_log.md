@@ -3,6 +3,60 @@
 Living log of material implementation decisions (per spec §12.3). Routine
 choices (file layout, names) are not logged here. Newest entries at the top.
 
+## 2026-08-14 — Railway deployment hardening
+
+Reviewed the codebase against the deployment target (Railway: long-running Node,
+not serverless) and fixed real issues found, in blast-radius order.
+
+### Memory leaks on long-running server (HIGH — real bug)
+On a persistent Node process (Railway, not Vercel serverless), three
+module-level Maps grew without bound because the retention sweep only cleared
+`SCANS`:
+- `STATE` (orchestrator.ts) — interview state per scan, never cleared.
+- `REPORTS` (synthesis-queue.ts) — generated client reports, never cleared
+  (`SYNTH` already self-cleaned after 5min, but `REPORTS` didn't).
+- Fix: exported `clearInterviewState(scanId)` and `clearSynthesisState(scanId)`;
+the retention sweep now calls both in its full-delete branch (when the answer
+window expires). The per-class purge branch (scraped window only) correctly
+keeps prospect data. New test verifies both maps are cleared on sweep.
+- Blast radius: orchestrator + synthesis-queue + retention. Cleanup-path only;
+tests use unique IDs so unaffected. 42 tests green.
+
+### Playwright chromium on Railway (HIGH — functional)
+Railway's default nixpacks Node build does not install chromium's system
+dependencies. The scraper's graceful-degradation path would have silently
+returned zero evidence on every scan (no tech signals, no web content) rather
+than crashing — a significant product regression, not a visible error.
+- Fix: added a `Dockerfile` (two-stage, `node:20-bookworm-slim`) that downloads
+the chromium browser at build time (`npx playwright install chromium`) and
+installs its shared-library deps at runtime via Playwright's own
+`npx playwright install-deps chromium` command — more reliable than
+hand-maintaining apt package names across Debian revisions. The browser binary
+lives under `/app/.pw-browsers` (`PLAYWRIGHT_BROWSERS_PATH`) so it is copied
+from build to runtime with the app.
+- Pinned `playwright` to exact `1.62.1` (was `^1.49.1`) so the browser binary
+downloaded at build time matches the library at runtime. Moved `playwright`
+from devDependencies to dependencies — the scraper imports it at runtime, so it
+is a real production dependency (any platform that prunes devDeps would break
+the scraper otherwise).
+- `.dockerignore` excludes `.env`, `node_modules/`, `.next/`, logs, editor
+files — secrets are never baked into the image.
+- Could not build the image locally (Docker Desktop daemon returning 500s); the
+Dockerfile follows the official Playwright-in-Docker pattern and will be
+validated by Railway's build.
+- Blast radius: new files (`Dockerfile`, `.dockerignore`) + package.json
+categorization. No app logic changed.
+
+### Minor correctness fixes (LOW)
+- `metadataBase` in `layout.tsx` was hardcoded to `http://localhost:3000`;
+now reads `process.env.NEXT_PUBLIC_APP_URL` (with the localhost fallback) so
+production metadata resolves correctly.
+- Removed dead `void sanitized` in `orchestrator.ingestResponse` — it computed
+a sanitized string then discarded it (the raw answer is stored for display and
+re-sanitized at LLM-consumption time in `sanitizeAnswers`). No behavior change.
+- Added `GET /api/health` endpoint + a Docker `HEALTHCHECK` so Railway can
+probe readiness without hitting the LLM/browser.
+
 ## 2026-08-14 — Dependency security hardening (Railway deploy gate)
 
 Railway blocked deployment on 4 CVEs in `next@15.1.6` (incl. CRITICAL
