@@ -255,14 +255,12 @@ export function OpportunityScanFunnel() {
 
   // ── render ───────────────────────────────────────────────────────────
   return (
-    <section id="scan" aria-label="AI opportunity scan">
+    <section id="scan" aria-label="Free AI Readiness Review">
       {st.step === "input" && (
         <Card className="mx-auto max-w-2xl animate-fade-in-up">
           <CardHeader>
-            <CardTitle>Start your free AI opportunity scan</CardTitle>
-            <CardDescription>
-              Takes about two minutes. You&apos;ll get a customized summary you can download right away.
-            </CardDescription>
+            <CardTitle>{content.review.heading}</CardTitle>
+            <CardDescription>{content.review.body}</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={startScan} className="space-y-5" noValidate>
@@ -292,15 +290,15 @@ export function OpportunityScanFunnel() {
                   onChange={(e) => setConfirmed(e.target.checked)}
                   className="mt-1 h-4 w-4 rounded border-input accent-[hsl(var(--accent))]"
                 />
-                <span>I represent this company and authorize this scan of its public information.</span>
+                <span>I represent this company and authorize this review of its public information.</span>
               </label>
               {/* Hidden MVP bot-challenge token (spec §6.3). Real CAPTCHA can swap in here. */}
               <input type="hidden" name="challenge" value={challenge} aria-hidden="true" />
               <Button type="submit" variant="accent" size="lg" disabled={submitting} className="w-full">
-                {submitting ? "Starting…" : "Start my scan"}
+                {submitting ? "Starting…" : content.review.cta}
               </Button>
               <p className="text-center text-xs text-muted-foreground">
-                We only scan public pages. No login or data access required.
+                {content.review.support}
               </p>
             </form>
           </CardContent>
@@ -426,7 +424,7 @@ export function OpportunityScanFunnel() {
       {st.step === "results" && (
         <Card className="mx-auto max-w-2xl animate-fade-in-up">
           <CardHeader>
-            <CardTitle>Your AI opportunity summary is ready</CardTitle>
+            <CardTitle>Your AI readiness summary is ready</CardTitle>
             <CardDescription>Download it now — it&apos;s yours to keep.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -450,7 +448,7 @@ export function OpportunityScanFunnel() {
                   </Button>
                 </div>
                 <Button variant="ghost" size="sm" onClick={restart}>
-                  Run another scan
+                  Start another review
                 </Button>
               </div>
             )}

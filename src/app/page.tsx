@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { content } from "@/content";
-import { ReviewForm } from "@/components/review-form";
+import { OpportunityScanFunnel } from "@/components/opportunity-scan-funnel";
 
 export default function HomePage() {
   return (
@@ -54,19 +54,10 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Review card — immediately visible beside the hero copy */}
+          {/* Review — immediately visible beside the hero copy. Runs the
+              full automated flow: research → interview → PDF + email. */}
           <div id="review" className="scroll-mt-24">
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-sm md:p-8">
-              <p className="font-serif text-2xl font-semibold tracking-tight text-foreground">
-                {content.review.heading}
-              </p>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                {content.review.body}
-              </p>
-              <div className="mt-6">
-                <ReviewForm />
-              </div>
-            </div>
+            <OpportunityScanFunnel />
           </div>
         </div>
       </section>

@@ -35,6 +35,29 @@ const styles = StyleSheet.create({
 
 void Font; // Font kept available for future custom-font swap; built-in used now.
 
+/**
+ * The PDF uses the built-in Helvetica (PDF standard-14 font, WinAnsiEncoding
+ * only). LLM-generated text can contain characters outside that set
+ * (e.g. "→", "✓", emoji), which crash @react-pdf/renderer's text engine
+ * ("Cannot read properties of undefined (reading 'S')"). This normalizes
+ * common Unicode punctuation to ASCII and strips anything else outside
+ * ASCII so the PDF always renders, regardless of model output.
+ */
+function s(value: string | undefined | null): string {
+  if (value == null) return "";
+  return String(value)
+    .replace(/[\u2192\u279C\u2794\u25B6\u21D2\u27A4]/g, "->")
+    .replace(/[\u2014\u2013]/g, "-") // em/en dash
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, "\"")
+    .replace(/\u2026/g, "...") // ellipsis
+    .replace(/[\u2022\u25AA\u25CF]/g, "-") // bullet
+    .replace(/[\u2713\u2714\u2717\u2718]/g, "*") // check / cross
+       .replace(/[\u00B7]/g, "·") // middle dot is WinAnsi-safe; keep
+    .replace(/[^\x00-\x7F\u00B7]/g, "") // strip remaining non-ASCII
+    .trim();
+}
+
 export function ClientSummaryPdf({ report }: { report: ClientReport }) {
   const date = new Date(report.generatedAt).toLocaleDateString(undefined, {
     year: "numeric",
@@ -49,13 +72,13 @@ export function ClientSummaryPdf({ report }: { report: ClientReport }) {
     >
       <Page size="A4" style={styles.page}>
         <View style={styles.header} fixed>
-          <Text style={styles.brand}>{content.orgName}</Text>
-          <Text style={styles.tagline}>Humans helping humans with AI · foxandloom.com</Text>
+          <Text style={styles.brand}>{s(content.orgName)}</Text>
+          <Text style={styles.tagline}>Humans helping humans · foxandloom.com</Text>
         </View>
 
-        <Text style={styles.h1}>{report.headline}</Text>
+        <Text style={styles.h1}>{s(report.headline)}</Text>
         <Text style={styles.meta}>
-          Prepared for {report.company} · {report.website} · {date}
+          Prepared for {s(report.company)} · {s(report.website)} · {date}
         </Text>
 
         <Text style={styles.sectionTitle}>Your AI opportunity areas (unranked)</Text>
@@ -68,11 +91,11 @@ export function ClientSummaryPdf({ report }: { report: ClientReport }) {
           report.areas.map((a, i) => (
             <View key={i} style={styles.area} break={i > 0 && i % 2 === 0}>
               <Text style={styles.areaTitle}>
-                {i + 1}. {a.title}
+                {i + 1}. {s(a.title)}
               </Text>
-              <Text style={styles.body}>{a.summary}</Text>
-              {a.example ? <Text style={styles.example}>For example: {a.example}</Text> : null}
-              <Text style={styles.ev}>Evidence: {a.evidenceIds.join(", ")}</Text>
+              <Text style={styles.body}>{s(a.summary)}</Text>
+              {a.example ? <Text style={styles.example}>For example: {s(a.example)}</Text> : null}
+              <Text style={styles.ev}>Evidence: {s(a.evidenceIds.join(", "))}</Text>
             </View>
           ))
         )}
@@ -82,11 +105,11 @@ export function ClientSummaryPdf({ report }: { report: ClientReport }) {
             <Text style={styles.sectionTitle}>What each perspective sees</Text>
             {report.perspectives.map((p, i) => (
               <View key={i} style={styles.perspective}>
-                <Text style={styles.perspectiveTitle}>{p.title}</Text>
-                <Text style={styles.perspectiveBody}>{p.summary}</Text>
-                {p.opportunity ? <Text style={styles.perspectiveBody}>Opportunity: {p.opportunity}</Text> : null}
-                {p.uncertainty ? <Text style={styles.perspectiveUncertainty}>Still unknown: {p.uncertainty}</Text> : null}
-                {p.evidenceIds.length > 0 ? <Text style={styles.ev}>Evidence: {p.evidenceIds.join(", ")}</Text> : null}
+                <Text style={styles.perspectiveTitle}>{s(p.title)}</Text>
+                <Text style={styles.perspectiveBody}>{s(p.summary)}</Text>
+                {p.opportunity ? <Text style={styles.perspectiveBody}>Opportunity: {s(p.opportunity)}</Text> : null}
+                {p.uncertainty ? <Text style={styles.perspectiveUncertainty}>Still unknown: {s(p.uncertainty)}</Text> : null}
+                {p.evidenceIds.length > 0 ? <Text style={styles.ev}>Evidence: {s(p.evidenceIds.join(", "))}</Text> : null}
               </View>
             ))}
           </View>
@@ -97,7 +120,7 @@ export function ClientSummaryPdf({ report }: { report: ClientReport }) {
             <Text style={styles.sectionTitle}>Where AI may not be the fit (yet)</Text>
             {report.notReadyNotes.map((n, i) => (
               <Text key={i} style={styles.note}>
-                • {n}
+                • {s(n)}
               </Text>
             ))}
           </View>
