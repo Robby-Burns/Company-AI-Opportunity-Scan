@@ -3,6 +3,29 @@
 Living log of material implementation decisions (per spec §12.3). Routine
 choices (file layout, names) are not logged here. Newest entries at the top.
 
+## 2026-08-14 — Dependency security hardening (Railway deploy gate)
+
+Railway blocked deployment on 4 CVEs in `next@15.1.6` (incl. CRITICAL
+CVE-2025-66478). Resolution:
+
+- **Bumped `next` 15.1.6 → 15.5.23** (latest 15.x, within the `^15.1.11`
+  range Railway required). Did NOT jump to Next 16 — that's a breaking major
+  bump; 15.5.x resolves all four flagged CVEs while staying on the same major.
+- **`eslint-config-next` bumped to match** (15.5.23) so the lint preset stays
+  in sync with the runtime.
+- **Transitive vuln cleanup via `npm overrides`** (the 3 highs that remained
+  after the next bump were in deps Next bundles internally):
+  - `postcss` forced to `^8.5.26` — fixes path-traversal / arbitrary-file-read
+    via `sourceMappingURL` (GHSA-6g55-p6wh-862q, -fxqj-rqcc-2cmp, -r28c-9q8g-f849)
+    in the nested `postcss@8.4.31` Next was shipping. Also bumped our own
+    `postcss` devDep to `^8.5.26` so the override doesn't conflict with the
+    direct dependency (npm rejects conflicting overrides).
+  - `sharp` forced to `^0.35.3` — fixes libvips CVEs (GHSA-f88m-g3jw-g9cj)
+    in the nested `sharp@0.34.5` Next uses for image optimization.
+- Verified all nested copies dedupe to the fixed versions (`npm ls --all`).
+- `npm audit` now reports **0 vulnerabilities**. All gates still green:
+  typecheck / lint / 41 tests / `next build`.
+
 ## 2026-08-14 — Hardening pass (gaps closed against spec acceptance criteria)
 
 ### Scraper now actually drives Playwright (spec §1.1, §8.1)
