@@ -84,9 +84,12 @@ describe("Retention sweep — per-class (spec §6.5)", () => {
         company: "Acme",
         website: "https://acme.com",
         headline: "h",
-        areas: [],
-        perspectives: [],
-        notReadyNotes: [],
+        companySnapshot: "",
+        dimensionsLearned: [],
+        opportunities: [],
+        questionsWorthInvestigating: [],
+        remainingUncertainty: [],
+        whatsNext: "",
         evidenceIds: [],
         generatedAt: now
       }

@@ -66,9 +66,9 @@ export function ClientSummaryPdf({ report }: { report: ClientReport }) {
   });
   return (
     <Document
-      title={`${report.company} — AI Opportunity Summary`}
+      title={`${report.company} — AI Readiness Summary`}
       author={content.orgName}
-      subject="Client AI Opportunity Summary"
+      subject="Client AI Readiness Summary"
     >
       <Page size="A4" style={styles.page}>
         <View style={styles.header} fixed>
@@ -81,55 +81,109 @@ export function ClientSummaryPdf({ report }: { report: ClientReport }) {
           Prepared for {s(report.company)} · {s(report.website)} · {date}
         </Text>
 
-        <Text style={styles.sectionTitle}>Your AI opportunity areas (unranked)</Text>
-        {report.areas.length === 0 ? (
+        {/* Company snapshot */}
+        {report.companySnapshot ? (
+          <>
+            <Text style={styles.sectionTitle}>Company snapshot</Text>
+            <Text style={styles.body}>{s(report.companySnapshot)}</Text>
+          </>
+        ) : null}
+
+        {/* What we learned — dimension table */}
+        <Text style={styles.sectionTitle}>What we learned</Text>
+        {report.dimensionsLearned.length === 0 ? (
           <Text style={styles.body}>
-            We couldn&apos;t surface enough supported opportunity areas from the available evidence. We&apos;d love to learn more
-            in a short call.
+            We did not capture enough supported detail across the five discovery
+            dimensions to summarize here. A short call would help us learn more.
           </Text>
         ) : (
-          report.areas.map((a, i) => (
-            <View key={i} style={styles.area} break={i > 0 && i % 2 === 0}>
+          report.dimensionsLearned.map((d, i) => (
+            <View key={`d${i}`} style={styles.area}>
               <Text style={styles.areaTitle}>
-                {i + 1}. {s(a.title)}
+                {d.label} · confidence: {d.confidence}
               </Text>
-              <Text style={styles.body}>{s(a.summary)}</Text>
-              {a.example ? <Text style={styles.example}>For example: {s(a.example)}</Text> : null}
-              <Text style={styles.ev}>Evidence: {s(a.evidenceIds.join(", "))}</Text>
+              <Text style={styles.body}>{s(d.whatWeLearned)}</Text>
+              {d.evidenceIds.length > 0 ? (
+                <Text style={styles.ev}>Evidence: {s(d.evidenceIds.join(", "))}</Text>
+              ) : null}
             </View>
           ))
         )}
 
-        {report.perspectives.length > 0 ? (
-          <View break={report.areas.length >= 3}>
-            <Text style={styles.sectionTitle}>What each perspective sees</Text>
-            {report.perspectives.map((p, i) => (
-              <View key={i} style={styles.perspective}>
-                <Text style={styles.perspectiveTitle}>{s(p.title)}</Text>
-                <Text style={styles.perspectiveBody}>{s(p.summary)}</Text>
-                {p.opportunity ? <Text style={styles.perspectiveBody}>Opportunity: {s(p.opportunity)}</Text> : null}
-                {p.uncertainty ? <Text style={styles.perspectiveUncertainty}>Still unknown: {s(p.uncertainty)}</Text> : null}
-                {p.evidenceIds.length > 0 ? <Text style={styles.ev}>Evidence: {s(p.evidenceIds.join(", "))}</Text> : null}
+        {/* Potential opportunity areas */}
+        <View break={report.dimensionsLearned.length >= 3}>
+          <Text style={styles.sectionTitle}>Potential opportunity areas (unranked)</Text>
+          {report.opportunities.length === 0 ? (
+            <Text style={styles.body}>
+              The interview did not surface a clearly supported opportunity worth deeper
+              investigation. That is a valid outcome — not every company needs AI or
+              automation right now.
+            </Text>
+          ) : (
+            report.opportunities.map((o, i) => (
+              <View key={`o${i}`} style={styles.area} break={i > 0 && i % 2 === 0}>
+                <Text style={styles.areaTitle}>
+                  {i + 1}. {s(o.name)}
+                </Text>
+                <Text style={styles.body}>
+                  <Text style={{ fontFamily: "Helvetica-Bold" }}>What we heard: </Text>
+                  {s(o.whatWeHeard)}
+                </Text>
+                <Text style={styles.body}>
+                  <Text style={{ fontFamily: "Helvetica-Bold" }}>Why it may matter: </Text>
+                  {s(o.whyItMayMatter)}
+                </Text>
+                <Text style={styles.ev}>Evidence: {s(o.evidenceIds.join(", "))}</Text>
+                {o.whatRemainsUnknown.length > 0 ? (
+                  <Text style={styles.example}>
+                    What remains unknown: {s(o.whatRemainsUnknown.join("; "))}
+                  </Text>
+                ) : null}
+                {o.recommendedDeeperInvestigation.length > 0 ? (
+                  <Text style={styles.example}>
+                    Recommended deeper investigation: {s(o.recommendedDeeperInvestigation.join("; "))}
+                  </Text>
+                ) : null}
               </View>
+            ))
+          )}
+        </View>
+
+        {/* Questions worth investigating */}
+        {report.questionsWorthInvestigating.length > 0 ? (
+          <View break={report.opportunities.length >= 2}>
+            <Text style={styles.sectionTitle}>Questions worth investigating</Text>
+            {report.questionsWorthInvestigating.map((q, i) => (
+              <Text key={`q${i}`} style={styles.note}>
+                • {s(q)}
+              </Text>
             ))}
           </View>
         ) : null}
 
-        {report.notReadyNotes.length > 0 ? (
+        {/* Remaining uncertainty */}
+        {report.remainingUncertainty.length > 0 ? (
           <View>
-            <Text style={styles.sectionTitle}>Where AI may not be the fit (yet)</Text>
-            {report.notReadyNotes.map((n, i) => (
-              <Text key={i} style={styles.note}>
-                • {s(n)}
-              </Text>
+            <Text style={styles.sectionTitle}>Remaining uncertainty</Text>
+            {report.remainingUncertainty.map((u, i) => (
+              <View key={`u${i}`} style={styles.perspective}>
+                <Text style={styles.perspectiveTitle}>Unknown: {s(u.unknown)}</Text>
+                <Text style={styles.perspectiveBody}>
+                  <Text style={{ fontFamily: "Helvetica-Bold" }}>Why it matters: </Text>
+                  {s(u.whyItMatters)}
+                </Text>
+                <Text style={styles.perspectiveBody}>
+                  <Text style={{ fontFamily: "Helvetica-Bold" }}>Evidence needed: </Text>
+                  {s(u.evidenceNeeded)}
+                </Text>
+              </View>
             ))}
           </View>
         ) : null}
 
         <Text style={styles.sectionTitle}>What&apos;s next</Text>
         <Text style={styles.body}>
-          This is a high-level snapshot, not a build plan. Book a free strategy session with our human team and we&apos;ll dig
-          into the specifics — and tell you honestly where AI won&apos;t help.{" "}
+          {s(report.whatsNext)}{" "}
           <Link src="https://foxandloom.com/contact">foxandloom.com/contact</Link>
         </Text>
 

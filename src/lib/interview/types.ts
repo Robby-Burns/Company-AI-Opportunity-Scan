@@ -1,46 +1,76 @@
 /**
- * Multi-perspective interview architecture (spec §7.1, §7.2).
+ * Multi-perspective interview architecture — coverage-controlled edition.
  *
- * The interview is driven by a Coordinator + Specialist personas, modeled on
- * the six dimensions of the paid Deep Assessment (Workflow, Technology, Data,
- * People & Process, Business Value, Risk). The free scan is a lighter version
- * of that same intellectual model — not a generic adaptive questionnaire.
+ * Canonical discovery dimensions (exactly five, per the interview design spec):
+ *   business  → Business Context
+ *   operations → Operations
+ *   systems   → Systems & Technology
+ *   data      → Data
+ *   people    → People & Work
  *
- * Per turn:
- *   1. Coordinator (one LLM call) — maintains the investigation state,
- *      selects the 2–3 lenses with the highest current information value,
- *      and assigns scoring weights.
- *   2. Selected personas (parallel LLM calls) — each reviews the current
- *      evidence + conversation + its own prior perspective and proposes a
- *      candidate question plus an updated perspective and a self-scored
- *      rubric.
- *   3. Deterministic scoring (no LLM) — weighted sum picks the best
- *      candidate.
+ * "Risk & People" is NO LONGER a combined lens. Risk is a cross-cutting
+ * consideration surfaced as signals inside the dimensions, not a sixth
+ * perspective. "Business Value" is NOT a standalone lens either — value
+ * signals (volume, frequency, time, impact) are collected where naturally
+ * available, but the deeper Business Value assessment belongs to the paid
+ * Deep Assessment, not the shallow interview.
  *
- * Personas retain perspective state across the whole interview, so the final
- * report can say "Operations Perspective: ...", "Business Perspective: ...".
+ * Core design principle: COVERAGE IS CONTROLLED. DEPTH IS ADAPTIVE.
+ *   - The Coordinator owns which dimension is investigated next and at what
+ *     depth. It is constrained by a deterministic Company Coverage Map so it
+ *     cannot tunnel-vision on one interesting answer.
+ *   - The Specialist owns what question to ask about that dimension. It
+ *     generates 2–3 candidates; the Coordinator's deterministic quality picker
+ *     selects the final question.
  */
 
 /** The five specialist lenses. Stable ids — do not change. */
-export type LensId = "operations" | "systems" | "data" | "business" | "risk";
+export type LensId = "business" | "operations" | "systems" | "data" | "people";
 
 export interface LensDef {
   id: LensId;
   /** Human label, e.g. "Operations". */
   label: string;
-  /** One-line framing shown to the prospect, e.g. "Where is work getting stuck?" */
+  /** One-line framing shown to the prospect. */
   prompt: string;
   /** Longer persona brief used in the LLM system prompt for this lens. */
   brief: string;
 }
+
+/** Coverage level for a discovery dimension. Asking ≠ covered. */
+export type CoverageLevel = "NOT_STARTED" | "LIGHT" | "ADEQUATE" | "DEEP";
+
+/** Question depth ladder (1=shallow context … 6=impact). Adaptive. */
+export type DepthLevel = 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface InterviewQuestion {
   id: string;
   text: string;
   kind?: "short" | "long" | "choice";
   choices?: string[];
-  /** Which lens generated this question (for the UI badge). */
+  /** Which lens generated this question (for the UI badge + trace). */
   lens?: LensId;
+  /** Depth at which this question was asked (for the trace). */
+  depth?: DepthLevel;
+}
+
+/** Per-dimension coverage state — the Company Coverage Map. */
+export interface DimensionCoverage {
+  dimension: LensId;
+  coverage: CoverageLevel;
+  confidence: "low" | "medium" | "high";
+  questionsAsked: number;
+  lastQuestionNumber: number; // 0 = never asked
+  keyFacts: string[];
+  knownUnknowns: string[];
+  evidenceIds: string[];
+  unresolvedGaps: string[];
+  /** Current depth reached in this dimension (drives the depth ladder). */
+  depth: DepthLevel;
+  /** Answer-quality signal for depth adaptation: short/vague vs rich/detailed. */
+  answerRichness: "thin" | "moderate" | "rich";
+  /** Whether the user signaled this dimension is N/A (e.g. "we have no systems"). */
+  notApplicable: boolean;
 }
 
 export interface PerspectiveState {
@@ -53,27 +83,64 @@ export interface PerspectiveState {
 }
 
 export interface CandidateScores {
-  relevance: number;
-  uncertaintyReduction: number;
-  businessSignificance: number;
-  novelty: number;
-  depthPotential: number;
-  conversationalNaturalness: number;
+  novelty: number; // produces NEW information
+  coverageGain: number; // improves understanding of an inadequately understood part of the selected dimension
+  companyUnderstanding: number; // improves OVERALL understanding of how the company operates
+  answerable: number; // answerable by the current user
+  specific: number; // specific enough to produce useful evidence (not a generic response)
+  conversational: number; // natural in a real consulting conversation; non-leading; non-technical
+  depthAppropriate: number; // right level given current evidence and user sophistication
 }
 
 export interface CandidateQuestion {
   lens: LensId;
+  depth: DepthLevel;
   question: { text: string; kind?: "short" | "long" | "choice"; choices?: string[] };
-  perspective: Omit<PerspectiveState, "lens" | "updatedAt">;
+  /** Evidence this candidate would help extract, per the specialist. */
+  expectedSignal?: string;
   scores: CandidateScores;
   rationale: string;
 }
 
+/**
+ * Coordinator plan — ONE dimension per turn (not 2–3). The coordinator owns
+ * coverage, rotation, depth, and a coverage update for the dimension that was
+ * just answered (if any).
+ */
+export interface CoverageUpdate {
+  dimension: LensId;
+  coverage: CoverageLevel;
+  confidence: "low" | "medium" | "high";
+  keyFacts: string[];
+  knownUnknowns: string[];
+  evidenceIds: string[]; // NEW evidence ids harvested from the last answer
+  unresolvedGaps: string[];
+  answerRichness: "thin" | "moderate" | "rich";
+  notApplicable: boolean;
+}
+
 export interface CoordinatorPlan {
-  lenses: LensId[];
-  weights: CandidateScores;
+  lens: LensId;
+  depth: DepthLevel;
+  coverageUpdate?: CoverageUpdate; // for the dimension just answered
   complete: boolean;
   rationale: string;
+  /** Candidate questions the specialist should generate (2–3). */
+  candidateCount: number;
+}
+
+/**
+ * Coordinator runtime state — owned and mutated ONLY by the coordinator.
+ * The persona never sees or modifies this; it only receives a snapshot of it
+ * (the company coverage map + confidence + known facts/unknowns + history).
+ */
+export interface CoordinatorState {
+  lastDimension: LensId | null;
+  questionsByDimension: Record<LensId, number>;
+  coverageByDimension: Record<LensId, CoverageLevel>;
+  confidenceByDimension: Record<LensId, "low" | "medium" | "high">;
+  knownUnknowns: string[]; // company-wide open questions
+  remainingQuestionBudget: number;
 }
 
 export interface InterviewState {
@@ -83,8 +150,30 @@ export interface InterviewState {
   maxQuestions: number;
   current?: InterviewQuestion;
   finished: boolean;
-  /** Per-lens perspective memory, persisted across turns. */
+  /** The Company Coverage Map — the heart of coverage-controlled rotation. */
+  coverage: Map<LensId, DimensionCoverage>;
+  /** Per-lens perspective memory, persisted across turns (for synthesis). */
   perspectives: Map<LensId, PerspectiveState>;
-  /** Lenses consulted so far (for novelty/coverage tracking). */
-  consulted: LensId[];
+  /** Ordered history of dimensions asked (for rotation guardrails). */
+  dimensionHistory: LensId[];
+  /** Coordinator runtime state — coverage/rotation/budget ownership. */
+  coordinator: CoordinatorState;
+  /** Developer instrumentation trace (per question). */
+  trace: TraceEntry[];
+}
+
+export interface TraceEntry {
+  questionNumber: number;
+  selectedDimension: LensId;
+  coverageBefore: CoverageLevel;
+  coverageAfter: CoverageLevel;
+  reasonDimensionSelected: string;
+  candidateQuestions: { text: string; scores: CandidateScores; selected: boolean; why: string }[];
+  selectedQuestion: string;
+  questionDepth: DepthLevel;
+  candidateScores: CandidateScores;
+  selectionRationale: string;
+  newEvidence: string[];
+  newUnknowns: string[];
+  opportunitySignals: string[];
 }

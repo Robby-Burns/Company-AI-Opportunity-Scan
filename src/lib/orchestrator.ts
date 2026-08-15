@@ -1,85 +1,151 @@
 /**
- * Interview orchestrator (spec §7.1, §7.2 — Phase 2).
+ * Interview orchestrator — coverage-controlled edition (spec §7.1, §7.2).
  *
- * Multi-perspective architecture:
- *   - Coordinator establishes the investigation state and selects 2–3 lenses.
- *   - Selected specialist personas generate candidate questions in parallel,
- *     each maintaining its own perspective across turns (memory).
- *   - Deterministic weighted-sum scoring picks the best question.
+ * Pipeline per turn:
+ *   1. Coordinator (1 LLM call): coverage update for the just-answered
+ *      dimension (if any) + proposed next dimension/depth + maybe complete.
+ *   2. Deterministic guardrails (selectDimension / determineDepth) override
+ *      the proposal if it would violate hard coverage constraints.
+ *   3. Specialist (1 LLM call) for the ONE selected dimension: generates 2–3
+ *      meaningfully-different candidate questions at the requested depth,
+ *      given the FULL interview state.
+ *   4. Coordinator (selectCandidate) picks ONE question.
  *
- * Bounded 8–12 questions — hard stop, no exceptions. The goal is the FEWEST
- * questions necessary to establish a compelling opportunity hypothesis and
- * identify what requires deeper investigation (HD: reduce uncertainty with the
- * smallest effort capable of reducing the greatest remaining uncertainty).
- *
- * Prospect-reported answers supersede scraped inferences (§7.1): PROSPECT_REPORTED
- * evidence is weighted above SCRAPED_* at synthesis.
- *
- * Graceful degradation: any LLM failure falls back to scripted questions so the
- * interview still completes (bounded) and the report still generates.
+ * Bounded 8–12 questions — hard stop, no exceptions. Graceful degradation:
+ * any LLM failure falls back to scripted questions so the interview still
+ * completes (bounded) and the report still generates.
  */
 import { complete } from "@/lib/llm";
 import { sanitize } from "@/lib/security/sanitize";
-import { getScan, listEvidence, recordAnswer, setStatus } from "@/lib/evidence/store";
+import { getScan, listEvidence, recordAnswer, setStatus, addEvidence } from "@/lib/evidence/store";
 import { content } from "@/content";
-import { coordinatorPlan, scoreCandidates } from "@/lib/interview/coordinator";
-import { emptyPerspective, lensDef, PERSONA_SYSTEM_SUFFIX } from "@/lib/interview/personas";
+import {
+  coordinatorPlan,
+  selectDimension,
+  determineDepth,
+  selectCandidate,
+  serializeInterviewStateForPersona
+} from "@/lib/interview/coordinator";
+import { lensDef, PERSONA_SYSTEM_SUFFIX, LENS_IDS } from "@/lib/interview/personas";
 import type {
   CandidateQuestion,
   CoordinatorPlan,
+  CoverageUpdate,
+  DepthLevel,
+  DimensionCoverage,
   InterviewQuestion,
   InterviewState,
   LensId,
-  PerspectiveState
+  TraceEntry
 } from "@/lib/interview/types";
 
-export type { InterviewQuestion, InterviewState, PerspectiveState, LensId } from "@/lib/interview/types";
+export type { InterviewQuestion, InterviewState, PerspectiveState, LensId, DimensionCoverage, TraceEntry } from "@/lib/interview/types";
 
 const STATE = new Map<string, InterviewState>();
+
+function emptyCoverage(d: LensId): DimensionCoverage {
+  return {
+    dimension: d,
+    coverage: "NOT_STARTED",
+    confidence: "low",
+    questionsAsked: 0,
+    lastQuestionNumber: 0,
+    keyFacts: [],
+    knownUnknowns: [],
+    evidenceIds: [],
+    unresolvedGaps: [],
+    depth: 1,
+    answerRichness: "moderate",
+    notApplicable: false
+  };
+}
 
 export function getInterviewState(scanId: string): InterviewState | undefined {
   return STATE.get(scanId);
 }
 
 export function initInterview(scanId: string): InterviewState {
+  const coverage = new Map<LensId, DimensionCoverage>();
+  for (const l of LENS_IDS) coverage.set(l, emptyCoverage(l));
   const st: InterviewState = {
     scanId,
     asked: 0,
     minQuestions: content.interview.minQuestions,
     maxQuestions: content.interview.maxQuestions,
     finished: false,
+    coverage,
     perspectives: new Map(),
-    consulted: []
+    dimensionHistory: [],
+    coordinator: {
+      lastDimension: null,
+      questionsByDimension: Object.fromEntries(LENS_IDS.map((l) => [l, 0])) as Record<LensId, number>,
+      coverageByDimension: Object.fromEntries(LENS_IDS.map((l) => [l, "NOT_STARTED"])) as Record<LensId, "NOT_STARTED">,
+      confidenceByDimension: Object.fromEntries(LENS_IDS.map((l) => [l, "low"])) as Record<LensId, "low" | "medium" | "high">,
+      knownUnknowns: [],
+      remainingQuestionBudget: content.interview.maxQuestions
+    },
+    trace: []
   };
   STATE.set(scanId, st);
   setStatus(scanId, "interviewing");
   return st;
 }
 
-/**
- * generate-next-question — internal fn (§8.2). Runs the coordinator + selected
- * personas + deterministic scoring. Returns the next bounded question, or
- * null when the interview is complete (hard stop at max, or coordinator
- * signals complete at >= min).
- */
+function mergeUnique(arr: string[], items: string[]): string[] {
+  return Array.from(new Set([...arr, ...items]));
+}
+
+function applyCoverageUpdate(st: InterviewState, update: CoverageUpdate, evidenceIds: string[]): void {
+  const c = st.coverage.get(update.dimension);
+  if (!c) return;
+  c.coverage = update.coverage;
+  c.confidence = update.confidence;
+  c.keyFacts = mergeUnique(c.keyFacts, update.keyFacts);
+  c.knownUnknowns = mergeUnique(c.knownUnknowns, update.knownUnknowns);
+  c.unresolvedGaps = update.unresolvedGaps.length > 0 ? update.unresolvedGaps : c.unresolvedGaps;
+  c.evidenceIds = mergeUnique(c.evidenceIds, evidenceIds);
+  c.answerRichness = update.answerRichness;
+  c.notApplicable = update.notApplicable || c.notApplicable;
+  st.coordinator.lastDimension = update.dimension;
+  st.coordinator.coverageByDimension[update.dimension] = update.coverage;
+  st.coordinator.confidenceByDimension[update.dimension] = update.confidence;
+  st.coordinator.knownUnknowns = mergeUnique(st.coordinator.knownUnknowns, update.knownUnknowns);
+}
+
+function allKnownFacts(st: InterviewState): string[] {
+  const out: string[] = [];
+  for (const l of LENS_IDS) {
+    const c = st.coverage.get(l);
+    if (c) out.push(...c.keyFacts);
+  }
+  return Array.from(new Set(out));
+}
+function allKnownUnknowns(st: InterviewState): string[] {
+  const out: string[] = [];
+  for (const l of LENS_IDS) {
+    const c = st.coverage.get(l);
+    if (c) out.push(...c.knownUnknowns);
+  }
+  return Array.from(new Set(out));
+}
+
 export async function nextQuestion(scanId: string): Promise<InterviewQuestion | null> {
   const st = STATE.get(scanId);
   if (!st) return null;
-
-  // Hard stop at max (spec: "hard stop, no exceptions").
   if (st.asked >= st.maxQuestions) {
     st.finished = true;
     return null;
   }
-
   const scan = getScan(scanId);
   if (!scan) return null;
 
   const evidence = listEvidence(scanId);
   const evidenceSummary = summarizeEvidence(evidence);
   const answersBlock = sanitizeAnswers(scan.answers);
+  const lastAnsweredDimension = st.current?.lens ?? null;
+  const lastAnswer = lastAnsweredDimension ? (scan.answers.get(st.current?.id ?? "") ?? "") : "";
 
-  // 1) Coordinator: select lenses + weights (+ maybe complete).
+  // 1) Coordinator.
   let plan: CoordinatorPlan;
   try {
     plan = await coordinatorPlan({
@@ -88,150 +154,199 @@ export async function nextQuestion(scanId: string): Promise<InterviewQuestion | 
       notes: scan.notes ?? "",
       evidenceSummary,
       answersBlock,
+      coverage: st.coverage,
       perspectives: st.perspectives,
-      consulted: st.consulted,
+      dimensionHistory: st.dimensionHistory,
+      lastAnsweredDimension,
+      lastAnswer,
       asked: st.asked,
       minQuestions: st.minQuestions,
       maxQuestions: st.maxQuestions
     });
   } catch {
-    // Coordinator failed → scripted fallback keeps the interview going.
     return fallbackQuestion(scanId, st);
   }
 
-  // Coordinator may signal completion, but only after the minimum.
+  // Apply coverage update for the dimension just answered.
+  if (plan.coverageUpdate) {
+    const evIds: string[] = [];
+    if (lastAnswer) {
+      const ev = addEvidence(scanId, {
+        kind: "PROSPECT_REPORTED",
+        source: "interview",
+        snippet: lastAnswer.slice(0, 600),
+        signal: `coverage:${plan.coverageUpdate.dimension}`,
+        confidence: plan.coverageUpdate.confidence
+      });
+      if (ev) evIds.push(ev.id);
+    }
+    applyCoverageUpdate(st, plan.coverageUpdate, evIds);
+    st.perspectives.set(plan.coverageUpdate.dimension, {
+      lens: plan.coverageUpdate.dimension,
+      beliefs: plan.coverageUpdate.keyFacts,
+      uncertainties: plan.coverageUpdate.knownUnknowns,
+      potentialOpportunity: "",
+      evidenceRefs: evIds,
+      updatedAt: Date.now()
+    });
+  }
+
   if (plan.complete && st.asked >= st.minQuestions) {
     st.finished = true;
+    logTrace(st, plan, null, null, "Coordinator signaled complete after minimum; ending interview.");
     return null;
   }
 
-  // 2) Selected personas generate candidates in parallel.
-  const lenses = plan.lenses;
-  const candidates = await Promise.all(
-    lenses.map((lens) => personaCandidate(lens, scan, evidenceSummary, answersBlock, st).catch(() => null))
-  );
+  // 2) Deterministic coverage guardrails.
+  const guard = selectDimension(plan.lens, st.coverage, st.dimensionHistory, st.asked);
+  const dimension = guard.dimension;
 
-  const valid = candidates.filter((c): c is CandidateQuestion => c !== null);
-  if (valid.length === 0) {
-    return fallbackQuestion(scanId, st);
+  // 3) Adaptive depth.
+  const depthRes = determineDepth(dimension, st.coverage, plan.depth);
+  const depth = depthRes.depth;
+
+  // 4) Specialist candidates.
+  let candidates: CandidateQuestion[] = [];
+  try {
+    candidates = await specialistCandidates(scan, evidenceSummary, answersBlock, st, dimension, depth, plan.candidateCount);
+  } catch {
+    candidates = [];
+  }
+  if (candidates.length === 0) {
+    const q = fallbackQuestion(scanId, st, dimension, depth);
+    logTrace(st, plan, { dimension, depth, reason: guard.reason + " " + depthRes.reason }, null, `Specialist failed; fallback for ${dimension}.`);
+    return q;
   }
 
-  // Persist each persona's updated perspective (memory).
-  for (const c of valid) {
-    const p: PerspectiveState = { lens: c.lens, ...c.perspective, updatedAt: Date.now() };
-    st.perspectives.set(c.lens, p);
+  // 5) Coordinator picks ONE candidate.
+  const askedTexts = st.trace.map((t) => t.selectedQuestion);
+  const picked = selectCandidate(candidates, askedTexts);
+  if (!picked) {
+    const q = fallbackQuestion(scanId, st, dimension, depth);
+    logTrace(st, plan, { dimension, depth, reason: guard.reason + " " + depthRes.reason }, null, `No candidate selected; fallback for ${dimension}.`);
+    return q;
   }
 
-  // 3) Deterministic scoring picks the best candidate.
-  const best = scoreCandidates(valid, plan.weights, lenses);
-  if (!best) return fallbackQuestion(scanId, st);
-
-  // Track coverage.
-  if (!st.consulted.includes(best.lens)) st.consulted.push(best.lens);
+  const best = picked.selected;
+  st.coordinator.lastDimension = dimension;
+  st.coordinator.questionsByDimension[dimension] += 1;
+  st.coordinator.remainingQuestionBudget = st.maxQuestions - st.asked - 1;
+  const cov = st.coverage.get(dimension);
+  if (cov) {
+    cov.questionsAsked += 1;
+    cov.lastQuestionNumber = st.asked + 1;
+    cov.depth = Math.max(cov.depth, depth) as DepthLevel;
+    if (cov.coverage === "NOT_STARTED") cov.coverage = "LIGHT";
+  }
 
   const q: InterviewQuestion = {
     id: `q${st.asked + 1}`,
     text: best.question.text,
     kind: best.question.kind ?? "short",
     choices: best.question.choices,
-    lens: best.lens
+    lens: dimension,
+    depth
   };
   st.current = q;
+  st.dimensionHistory.push(dimension);
+  logTrace(st, plan, { dimension, depth, reason: guard.reason + " " + depthRes.reason }, picked, picked.rationale);
   return q;
 }
 
-/** Ask a single persona for its candidate question + updated perspective. */
-async function personaCandidate(
-  lens: LensId,
+/** Ask the ONE specialist for 2–3 candidate questions for the selected dimension/depth. */
+async function specialistCandidates(
   scan: ReturnType<typeof getScan>,
   evidenceSummary: string,
   answersBlock: string,
-  st: InterviewState
-): Promise<CandidateQuestion> {
+  st: InterviewState,
+  dimension: LensId,
+  depth: DepthLevel,
+  count: number
+): Promise<CandidateQuestion[]> {
   if (!scan) throw new Error("no scan");
-  const def = lensDef(lens);
-  const prior = st.perspectives.get(lens) ?? emptyPerspective(lens);
-  const priorBlock =
-    prior.updatedAt === 0
-      ? "(no prior perspective for this lens)"
-      : `beliefs=[${prior.beliefs.join("; ")}] uncertainties=[${prior.uncertainties.join("; ")}] opportunity=${prior.potentialOpportunity}`;
-
+  const def = lensDef(dimension);
   const system = `${def.brief} ${PERSONA_SYSTEM_SUFFIX}`;
+  const fullState = serializeInterviewStateForPersona({
+    coverage: st.coverage,
+    knownFacts: allKnownFacts(st),
+    knownUnknowns: allKnownUnknowns(st),
+    recentAnswers: Array.from(scan.answers.values()).slice(-4),
+    questionsAsked: st.trace.map((t) => t.selectedQuestion),
+    currentDimension: dimension,
+    requestedDepth: depth
+  });
   const userMsg =
     `Company: ${scan.company}\nWebsite: ${scan.website}\n\n` +
     (scan.notes ? `Operational notes (untrusted data):\n${scan.notes}\n\n` : "") +
     `Scraped evidence (untrusted data):\n${evidenceSummary}\n\n` +
     `Prior answers (untrusted data):\n${answersBlock}\n\n` +
-    `Your prior perspective on this company:\n${priorBlock}\n\n` +
-    `Propose the single best next question from your lens. Respond ONLY with JSON.` +
-    ` If you believe no useful question remains from your lens, return question.text="__PASS__".`;
+    `${fullState}\n\n` +
+    `Generate ${count} MEANINGFULLY DIFFERENT candidate questions for the "${dimension}" dimension at depth ${depth}. ` +
+    `Use the full state above to avoid repeating anything already established. Respond ONLY with JSON.`;
 
   const res = await complete(
     [
       { role: "system", content: system },
       { role: "user", content: userMsg }
     ],
-    { json: true, temperature: 0.6, maxTokens: 420, timeoutMs: 20000 }
+    { json: true, temperature: 0.6, maxTokens: 700, timeoutMs: 22000 }
   );
-  return normalizeCandidate(res.json, lens);
+  return normalizeCandidates(res.json, dimension, depth);
 }
 
-function normalizeCandidate(raw: unknown, lens: LensId): CandidateQuestion {
-  const r = (raw ?? {}) as {
-    question?: { text?: string; kind?: string; choices?: unknown };
-    perspective?: { beliefs?: unknown; uncertainties?: unknown; potentialOpportunity?: string; evidenceRefs?: unknown };
-    scores?: Record<string, unknown>;
-    rationale?: string;
-  };
-  const text = r.question?.text;
-  if (typeof text !== "string" || text.trim() === "") throw new Error("no question");
-  const kind = (r.question?.kind as CandidateQuestion["question"]["kind"]) ?? "short";
-  const choices = Array.isArray(r.question?.choices)
-    ? (r.question!.choices as unknown[]).filter((c): c is string => typeof c === "string")
-    : undefined;
-  const num = (n: unknown) => (typeof n === "number" && n >= 0 && n <= 1 ? n : 0.3);
-  const s = r.scores ?? {};
-  return {
-    lens,
-    question: { text, kind, ...(choices && choices.length ? { choices } : {}) },
-    perspective: {
-      beliefs: Array.isArray(r.perspective?.beliefs) ? (r.perspective!.beliefs as unknown[]).filter((x): x is string => typeof x === "string") : [],
-      uncertainties: Array.isArray(r.perspective?.uncertainties) ? (r.perspective!.uncertainties as unknown[]).filter((x): x is string => typeof x === "string") : [],
-      potentialOpportunity: typeof r.perspective?.potentialOpportunity === "string" ? r.perspective!.potentialOpportunity : "",
-      evidenceRefs: Array.isArray(r.perspective?.evidenceRefs) ? (r.perspective!.evidenceRefs as unknown[]).filter((x): x is string => typeof x === "string") : []
-    },
-    scores: {
-      relevance: num(s.relevance),
-      uncertaintyReduction: num(s.uncertaintyReduction),
-      businessSignificance: num(s.businessSignificance),
-      novelty: num(s.novelty),
-      depthPotential: num(s.depthPotential),
-      conversationalNaturalness: num(s.conversationalNaturalness)
-    },
-    rationale: typeof r.rationale === "string" ? r.rationale : ""
-  };
+function normalizeCandidates(raw: unknown, lens: LensId, depth: DepthLevel): CandidateQuestion[] {
+  const r = (raw ?? {}) as { candidates?: unknown };
+  const arr = Array.isArray(r.candidates) ? r.candidates : [];
+  const out: CandidateQuestion[] = [];
+  for (const item of arr) {
+    if (!item || typeof item !== "object") continue;
+    const c = item as {
+      question?: { text?: string; kind?: string; choices?: unknown };
+      depth?: unknown;
+      expectedSignal?: unknown;
+      scores?: Record<string, unknown>;
+      rationale?: unknown;
+    };
+    const text = c.question?.text;
+    if (typeof text !== "string" || text.trim() === "") continue;
+    const kind = (c.question?.kind as CandidateQuestion["question"]["kind"]) ?? "short";
+    const choices = Array.isArray(c.question?.choices)
+      ? (c.question!.choices as unknown[]).filter((x): x is string => typeof x === "string")
+      : undefined;
+    const num = (n: unknown) => (typeof n === "number" && n >= 0 && n <= 1 ? n : 0.3);
+    const s = c.scores ?? {};
+    out.push({
+      lens,
+      depth: (typeof c.depth === "number" && c.depth >= 1 && c.depth <= 6 ? c.depth : depth) as DepthLevel,
+      question: { text, kind, ...(choices && choices.length ? { choices } : {}) },
+      expectedSignal: typeof c.expectedSignal === "string" ? c.expectedSignal : undefined,
+      scores: {
+        novelty: num(s.novelty),
+        coverageGain: num(s.coverageGain),
+        companyUnderstanding: num(s.companyUnderstanding),
+        answerable: num(s.answerable),
+        specific: num(s.specific),
+        conversational: num(s.conversational),
+        depthAppropriate: num(s.depthAppropriate)
+      },
+      rationale: typeof c.rationale === "string" ? c.rationale : ""
+    });
+    if (out.length >= 3) break;
+  }
+  return out;
 }
 
-/** ingest-response — internal fn (§8.2). Records the prospect answer as evidence. */
+/** ingest-response — records the prospect answer. The coverage update for this
+ *  answer is extracted by the coordinator on the NEXT nextQuestion() call. */
 export async function ingestResponse(scanId: string, questionId: string, answer: string): Promise<boolean> {
   const st = STATE.get(scanId);
   if (!st) return false;
   const scan = getScan(scanId);
   if (!scan) return false;
-  // Store raw for display; re-sanitized at LLM-consumption (spec §6.4).
   recordAnswer(scanId, questionId, answer);
   st.asked += 1;
   st.current = undefined;
   if (st.asked >= st.maxQuestions) st.finished = true;
-  // Convert answer to PROSPECT_REPORTED evidence (spec Phase 2 exit condition).
-  const { addEvidence } = await import("@/lib/evidence/store");
-  addEvidence(scanId, {
-    kind: "PROSPECT_REPORTED",
-    source: "interview",
-    snippet: answer.slice(0, 600),
-    signal: `answer:${questionId}`,
-    confidence: "high"
-  });
   return true;
 }
 
@@ -239,12 +354,45 @@ export function isInterviewFinished(scanId: string): boolean {
   return STATE.get(scanId)?.finished ?? false;
 }
 
-/**
- * Clear interview state for a scan (called by the retention sweep when a scan
- * is fully expired). Prevents unbounded growth of the STATE map.
- */
 export function clearInterviewState(scanId: string): void {
   STATE.delete(scanId);
+}
+
+/* ── Trace logging (development instrumentation, §22) ──────────────── */
+
+function logTrace(
+  st: InterviewState,
+  plan: CoordinatorPlan,
+  selection: { dimension: LensId; depth: DepthLevel; reason: string } | null,
+  picked: { selected: CandidateQuestion; rationale: string } | null,
+  note: string
+): void {
+  const dim = selection?.dimension ?? plan.lens;
+  const cov = st.coverage.get(dim);
+  const entry: TraceEntry = {
+    questionNumber: st.asked + 1,
+    selectedDimension: dim,
+    coverageBefore: cov?.coverage ?? "NOT_STARTED",
+    coverageAfter: cov?.coverage ?? "NOT_STARTED",
+    reasonDimensionSelected: selection?.reason ?? plan.rationale,
+    candidateQuestions: [],
+    selectedQuestion: picked?.selected.question.text ?? "",
+    questionDepth: selection?.depth ?? plan.depth,
+    candidateScores: picked?.selected.scores ?? {
+      novelty: 0, coverageGain: 0, companyUnderstanding: 0, answerable: 0, specific: 0, conversational: 0, depthAppropriate: 0
+    },
+    selectionRationale: note,
+    newEvidence: [],
+    newUnknowns: [],
+    opportunitySignals: []
+  };
+  st.trace.push(entry);
+  // eslint-disable-next-line no-console
+  console.log(
+    `[interview] Q${entry.questionNumber} dim=${entry.selectedDimension} depth=${entry.questionDepth} ` +
+      `cov=${entry.coverageBefore}→${entry.coverageAfter} :: ${entry.reasonDimensionSelected} ` +
+      `:: q="${entry.selectedQuestion.slice(0, 90)}" :: ${entry.selectionRationale}`
+  );
 }
 
 function summarizeEvidence(evidence: ReturnType<typeof listEvidence>): string {
@@ -264,23 +412,34 @@ function sanitizeAnswers(answers: Map<string, string>): string {
   return out.join("\n");
 }
 
-const FALLBACK_QUESTIONS: InterviewQuestion[] = [
-  { id: "fb1", text: "In a sentence or two, what does your company do and who do you serve?", kind: "long", lens: "business" },
-  { id: "fb2", text: "Roughly how many people are on your team?", kind: "short", lens: "risk" },
-  { id: "fb3", text: "Which tools or systems run your core operations today?", kind: "long", lens: "systems" },
-  { id: "fb4", text: "Where do you or your team lose the most time to manual, repetitive work?", kind: "long", lens: "operations" },
-  { id: "fb5", text: "How is your data currently stored and shared across the team?", kind: "short", lens: "data" },
-  { id: "fb6", text: "Have you tried any AI tools so far? If so, what worked or didn't?", kind: "long", lens: "systems" },
-  { id: "fb7", text: "What would a successful AI outcome look like for you in the next 6 months?", kind: "long", lens: "business" },
-  { id: "fb8", text: "Is there a specific bottleneck you're hoping this scan surfaces?", kind: "long", lens: "operations" },
-  { id: "fb9", text: "How soon are you hoping to act on an AI initiative?", kind: "choice", choices: ["Now", "1–3 months", "3–6 months", "Just exploring"], lens: "business" },
-  { id: "fb10", text: "Anything else we should know about your operations or constraints?", kind: "long", lens: "risk" },
-  { id: "fb11", text: "What's the single biggest daily frustration you'd want solved first?", kind: "long", lens: "operations" },
-  { id: "fb12", text: "Who would be responsible for implementing a new tool or process?", kind: "short", lens: "risk" }
-];
+const FALLBACK_QUESTIONS: Record<LensId, InterviewQuestion[]> = {
+  business: [
+    { id: "fb-b1", text: "In a sentence or two, what does your company do and who do you serve?", kind: "long", lens: "business", depth: 1 }
+  ],
+  operations: [
+    { id: "fb-o1", text: "Walk me through how the main work in your business actually gets done day to day.", kind: "long", lens: "operations", depth: 1 },
+    { id: "fb-o2", text: "Where does that work tend to slow down or need extra effort?", kind: "long", lens: "operations", depth: 4 }
+  ],
+  systems: [
+    { id: "fb-s1", text: "What software or systems does your team rely on to run the business?", kind: "long", lens: "systems", depth: 1 },
+    { id: "fb-s2", text: "How does information move between those systems today?", kind: "long", lens: "systems", depth: 3 }
+  ],
+  data: [
+    { id: "fb-d1", text: "Where does the information your team needs actually live?", kind: "long", lens: "data", depth: 1 },
+    { id: "fb-d2", text: "Is that information easy to get to when someone needs it?", kind: "short", lens: "data", depth: 2 }
+  ],
+  people: [
+    { id: "fb-p1", text: "Who on your team handles the work we've been talking about?", kind: "short", lens: "people", depth: 1 },
+    { id: "fb-p2", text: "How is the work split up across your team today?", kind: "long", lens: "people", depth: 2 }
+  ]
+};
 
-function fallbackQuestion(scanId: string, st: InterviewState): InterviewQuestion {
-  const q = FALLBACK_QUESTIONS[st.asked] ?? FALLBACK_QUESTIONS[FALLBACK_QUESTIONS.length - 1]!;
-  st.current = q;
-  return q;
+function fallbackQuestion(scanId: string, st: InterviewState, dimension?: LensId, depth?: DepthLevel): InterviewQuestion {
+  const dim = dimension ?? "business";
+  const pool = FALLBACK_QUESTIONS[dim] ?? FALLBACK_QUESTIONS.business;
+  const q = pool[Math.min(st.asked, pool.length - 1)] ?? FALLBACK_QUESTIONS.business[0]!;
+  const out: InterviewQuestion = { ...q, id: `fb_${st.asked + 1}`, depth: depth ?? q.depth ?? 1 };
+  st.current = out;
+  if (!st.dimensionHistory.includes(dim)) st.dimensionHistory.push(dim);
+  return out;
 }

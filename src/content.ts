@@ -314,13 +314,13 @@ export const content = {
     maxQuestions: 12
   },
   perspectives: {
-    intro: "Your company is being looked at from five different angles.",
+    intro: "We're building a picture of your whole company across five areas.",
     lenses: [
-      { id: "operations", label: "Operations", prompt: "Where is work getting stuck?" },
-      { id: "systems", label: "Technology", prompt: "Where are your systems creating friction?" },
-      { id: "data", label: "Data", prompt: "What information could you actually use?" },
-      { id: "business", label: "Business", prompt: "Where could AI create measurable value?" },
-      { id: "risk", label: "Risk & People", prompt: "What could prevent it from working?" }
+      { id: "business", label: "Business Context", prompt: "What does the company do, and who does it serve?" },
+      { id: "operations", label: "Operations", prompt: "How does the work actually get done?" },
+      { id: "systems", label: "Systems & Technology", prompt: "What systems support the work?" },
+      { id: "data", label: "Data", prompt: "Where does the information live?" },
+      { id: "people", label: "People & Work", prompt: "Who does the work, and how?" }
     ]
   }
 } as const;

@@ -101,29 +101,43 @@ function renderBriefText(b: SalesBrief): string {
     `Summary:`,
     b.summary,
     ``,
-    `Opportunity areas (unranked):`,
-    ...b.areas.flatMap((a, i) => [
-      `${i + 1}. ${a.title}`,
-      `   ${a.summary}`,
-      `   Example: ${a.example}`,
-      `   Evidence: ${a.evidenceIds.join(", ") || "(none)"}`
-    ]),
+    `Company snapshot:`,
+    b.companySnapshot || "(none)",
     ``,
-    `Perspectives:`,
-    ...(b.perspectives.length
-      ? b.perspectives.flatMap((p) => [
-          `- ${p.title}: ${p.summary}`,
-          ...(p.opportunity ? [`    Opportunity: ${p.opportunity}`] : []),
-          ...(p.uncertainty ? [`    Still unknown: ${p.uncertainty}`] : []),
-          `    Evidence: ${p.evidenceIds.join(", ") || "(none)"}`
+    `What we learned (by dimension):`,
+    ...(b.dimensionsLearned.length
+      ? b.dimensionsLearned.flatMap((d) => [
+          `- ${d.label}: ${d.whatWeLearned} (confidence: ${d.confidence})`,
+          `    Evidence: ${d.evidenceIds.join(", ") || "(none)"}`
         ])
       : ["- (none)"]),
     ``,
-    `Gaps / follow-ups:`,
-    ...(b.gaps.length ? b.gaps.map((g) => `- ${g}`) : ["- (none)"]),
+    `Potential opportunity areas (unranked):`,
+    ...(b.opportunities.length
+      ? b.opportunities.flatMap((o, i) => [
+          `${i + 1}. ${o.name}`,
+          `   What we heard: ${o.whatWeHeard}`,
+          `   Why it may matter: ${o.whyItMayMatter}`,
+          `   Evidence: ${o.evidenceIds.join(", ") || "(none)"}`,
+          `   What remains unknown: ${o.whatRemainsUnknown.join("; ") || "(none)"}`,
+          `   Recommended deeper investigation: ${o.recommendedDeeperInvestigation.join("; ") || "(none)"}`
+        ])
+      : ["- (none — no supported opportunity identified)"]),
     ``,
-    `Recommended questions for first call:`,
-    ...(b.recommendedQuestions.length ? b.recommendedQuestions.map((q) => `- ${q}`) : ["- (none)"]),
+    `Questions worth investigating:`,
+    ...(b.questionsWorthInvestigating.length ? b.questionsWorthInvestigating.map((q) => `- ${q}`) : ["- (none)"]),
+    ``,
+    `Remaining uncertainty:`,
+    ...(b.remainingUncertainty.length
+      ? b.remainingUncertainty.flatMap((u) => [
+          `- Unknown: ${u.unknown}`,
+          `    Why it matters: ${u.whyItMatters}`,
+          `    Evidence needed: ${u.evidenceNeeded}`
+        ])
+      : ["- (none)"]),
+    ``,
+    `Contradictions (public vs stakeholder):`,
+    ...(b.contradictions.length ? b.contradictions.map((c) => `- ${c}`) : ["- (none)"]),
     ``,
     `Evidence ids used: ${b.evidenceIds.join(", ") || "(none)"}`
   ];
@@ -138,32 +152,35 @@ function renderBriefHtml(b: SalesBrief): string {
     s.replace(/[&<>\""]/g, (c) =>
       c === "&" ? ENT.amp : c === "<" ? ENT.lt : c === ">" ? ENT.gt : ENT.quot
     );
-  const areas = b.areas
-    .map(
-      (a) =>
-        `<li><strong>${esc(a.title)}</strong><br/>${esc(a.summary)}<br/><em>Example:</em> ${esc(a.example)}<br/><em>Evidence:</em> ${esc(a.evidenceIds.join(", ") || "(none)")}</li>`
-    )
-    .join("");
-  const gaps = b.gaps.map((g) => `<li>${esc(g)}</li>`).join("") || "<li>(none)</li>";
-  const qs = b.recommendedQuestions.map((q) => `<li>${esc(q)}</li>`).join("") || "<li>(none)</li>";
-  const perspectives = b.perspectives
-    .map(
-      (p) =>
-        `<li><strong>${esc(p.title)}</strong><br/>${esc(p.summary)}` +
-        (p.opportunity ? `<br/><em>Opportunity:</em> ${esc(p.opportunity)}` : "") +
-        (p.uncertainty ? `<br/><em>Still unknown:</em> ${esc(p.uncertainty)}` : "") +
-        `<br/><em>Evidence:</em> ${esc(p.evidenceIds.join(", ") || "(none)")}</li>`
-    )
+  const dims = b.dimensionsLearned
+    .map((d) => `<li><strong>${esc(d.label)}</strong> <em>(${d.confidence})</em><br/>${esc(d.whatWeLearned)}<br/><em>Evidence:</em> ${esc(d.evidenceIds.join(", ") || "(none)")}</li>`)
     .join("") || "<li>(none)</li>";
+  const opps = b.opportunities.length
+    ? b.opportunities
+        .map(
+          (o) =>
+            `<li><strong>${esc(o.name)}</strong><br/><em>What we heard:</em> ${esc(o.whatWeHeard)}<br/><em>Why it may matter:</em> ${esc(o.whyItMayMatter)}<br/><em>Evidence:</em> ${esc(o.evidenceIds.join(", ") || "(none)")}<br/><em>What remains unknown:</em> ${esc(o.whatRemainsUnknown.join("; ") || "(none)")}<br/><em>Recommended deeper investigation:</em> ${esc(o.recommendedDeeperInvestigation.join("; ") || "(none)")}</li>`
+        )
+        .join("")
+    : "<li>(none — no supported opportunity identified)</li>";
+  const qs = b.questionsWorthInvestigating.map((q) => `<li>${esc(q)}</li>`).join("") || "<li>(none)</li>";
+  const unc = b.remainingUncertainty.length
+    ? b.remainingUncertainty
+        .map((u) => `<li><strong>${esc(u.unknown)}</strong><br/><em>Why it matters:</em> ${esc(u.whyItMatters)}<br/><em>Evidence needed:</em> ${esc(u.evidenceNeeded)}</li>`)
+        .join("")
+    : "<li>(none)</li>";
+  const contra = b.contradictions.map((c) => `<li>${esc(c)}</li>`).join("") || "<li>(none)</li>";
   return [
     `<!doctype html><html><body style="font-family:system-ui,sans-serif;line-height:1.5">`,
     `<h2>Fox ${ENT.amp} Loom — Sales Intelligence Brief</h2>`,
     `<p>Company: <strong>${esc(b.company)}</strong> ${ENT.middot} ${esc(b.website)}<br/>Contact: ${esc(b.contactEmail)} ${ENT.middot} ${new Date(b.generatedAt).toISOString()}</p>`,
     `<h3>Summary</h3><p>${esc(b.summary)}</p>`,
-    `<h3>Opportunity areas (unranked)</h3><ul>${areas}</ul>`,
-    `<h3>Perspectives</h3><ul>${perspectives}</ul>`,
-    `<h3>Gaps / follow-ups</h3><ul>${gaps}</ul>`,
-    `<h3>Recommended first-call questions</h3><ul>${qs}</ul>`,
+    `<h3>Company snapshot</h3><p>${esc(b.companySnapshot || "(none)")}</p>`,
+    `<h3>What we learned (by dimension)</h3><ul>${dims}</ul>`,
+    `<h3>Potential opportunity areas (unranked)</h3><ul>${opps}</ul>`,
+    `<h3>Questions worth investigating</h3><ul>${qs}</ul>`,
+    `<h3>Remaining uncertainty</h3><ul>${unc}</ul>`,
+    `<h3>Contradictions (public vs stakeholder)</h3><ul>${contra}</ul>`,
     `<p><em>Evidence ids used:</em> ${esc(b.evidenceIds.join(", ") || "(none)")}</p>`,
     `</body></html>`
   ].join("\n");
