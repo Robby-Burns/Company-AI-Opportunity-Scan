@@ -75,7 +75,15 @@ A scheduled sweep (`lib/retention.ts`) deletes expired scans. MVP uses an
 in-memory store; a real DB is a flagged follow-up before scale (see
 `build_log.md`).
 
-## Architecture (spec §7.1)
+## Architecture & 5-Stage Product Lifecycle
+
+The Company AI Opportunity Scan is the entry stage of the Fox & Loom product lifecycle:
+
+1. **Opportunity Scan** (*"Is there something here worth investigating?"*) — Identify credible opportunities from limited evidence.
+2. **Deep Assessment** (*"What opportunities actually matter, and is one worth pursuing?"*) — Investigate the business across 6 dimensions, validate bottlenecks, evaluate feasibility/value/risk, and prioritize.
+3. **Build Decision** (*"What should we build?"*) — Choose the implementation path (build vs. buy vs. process change vs. do nothing).
+4. **Atlas** (*"What is the evidence-supported specification?"*) — Translate the decision into an approved specification.
+5. **Shipyard** (*"Can we build and deploy it correctly?"*) — Engineer, test, secure, deploy, and document with Deployment Assurance.
 
 ```
 [Form /api/scan] → [SSE /api/scan/[id]/events → research-scraper]
@@ -83,21 +91,20 @@ in-memory store; a real DB is a flagged follow-up before scale (see
                  → [Synthesis + /api/report/[id]/download + email-dispatch]
 ```
 
-- **Evidence store** (`lib/evidence/store.ts`): every claim in both reports
-  traces to a stored `evidence_id`; claims without supporting evidence are
-  **omitted, not guessed** (enforced in `lib/synthesis.ts`).
-- **Interview bounds**: hard stop at 12 questions, can finish early at 8
-  (`lib/orchestrator.ts`).
-- **Multi-perspective interview**: a Coordinator selects 2–3 specialist
-  lenses per turn (Operations, Technology, Data, Business, Risk & People);
-  personas generate candidate questions in parallel; deterministic scoring
-  picks the best. Personas retain perspective state across the interview,
-  which becomes the report's "What each perspective sees" section
-  (`lib/interview/`). Modeled on the paid Deep Assessment dimensions.
-- **Graceful degradation**: scraper failure/timeout proceeds to the interview
-  with partial evidence; synthesis failure falls back to a minimal
-  evidence-backed report.
+### Report Structure (6 Sections)
+1. **Opportunity Hypothesis** — specific operational locus and confidence worth investigating (or graceful null if no opportunity emerged).
+2. **Why We Identified It** — direct observations citing valid `evidence_id`s.
+3. **Potential Impact** — directional operational magnitude grounded strictly in prospect-reported evidence (no fabricated ROI).
+4. **Additional Signals** — secondary opportunities or friction points without forced single-winner ranking.
+5. **What Remains Unknown** — key operational, technical, and data blindspots.
+6. **What a Deep Assessment Would Investigate** — strictly diagnostic questions (prohibiting task/audit checklists).
+
+### Invariants & Ingestion Contracts
+- **Governing Rule**: *"Specific enough that the prospect recognizes a real opportunity in their business, but incomplete enough that determining whether that opportunity is valuable, feasible, safe, and worth pursuing remains the purpose of the Deep Assessment."*
+- **Information Budget (8–12 questions)**: Dynamic stopping starting at Q8 once a credible hypothesis is established. Never continues merely to exhaust budget; hard stop at 12.
+- **Evidence store** (`lib/evidence/store.ts`): every claim in both reports traces to a stored `evidence_id`; unsupported claims are omitted.
 - **Prospect-reported answers supersede scraped inferences** on conflict.
+- **Deep Assessment Intake Package** (`lib/synthesis.ts` / `createIntakePackage()`): exports structured payload for seamless handoff to the Deep Assessment.
 
 ## Testing
 

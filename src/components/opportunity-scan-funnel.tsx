@@ -424,31 +424,31 @@ export function OpportunityScanFunnel() {
       {st.step === "results" && (
         <Card className="mx-auto max-w-2xl animate-fade-in-up">
           <CardHeader>
-            <CardTitle>Your AI readiness summary is ready</CardTitle>
+            <CardTitle>Your Opportunity Scan summary is ready</CardTitle>
             <CardDescription>Download it now — it&apos;s yours to keep.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             {st.reportReady === false ? (
               <div className="space-y-3" aria-live="polite">
                 <Progress value={70} className="animate-pulse" />
-                <p className="text-sm text-muted-foreground">Putting the finishing touches on your report…</p>
+                <p className="text-sm text-muted-foreground">Synthesizing your opportunity hypothesis brief…</p>
               </div>
             ) : (
               <div className="space-y-4">
                 <Button variant="accent" size="lg" className="w-full" onClick={downloadReport}>
-                  Download my PDF summary
+                  Download my Opportunity Scan summary (PDF)
                 </Button>
                 <div className="rounded-lg border border-border bg-secondary/30 p-4 text-sm">
-                  <p className="font-medium">Want the deeper dive?</p>
+                  <p className="font-medium">Ready for the Deep Assessment?</p>
                   <p className="mt-1 text-muted-foreground">
-                    Book a free strategy session with our human team. We&apos;ll dig into the specifics — and tell you honestly where AI won&apos;t help.
+                    Connect with our human team to evaluate this opportunity, validate workflows and systems, and determine whether it&apos;s worth pursuing.
                   </p>
                   <Button asChild variant="outline" className="mt-3">
-                    <a href="/contact">Book a strategy session</a>
+                    <a href="/contact">Schedule a discussion</a>
                   </Button>
                 </div>
                 <Button variant="ghost" size="sm" onClick={restart}>
-                  Start another review
+                  Start another scan
                 </Button>
               </div>
             )}

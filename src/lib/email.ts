@@ -27,7 +27,7 @@ export interface EmailDispatcher {
 export async function dispatchSalesBrief(brief: SalesBrief): Promise<{ ok: boolean; detail?: string }> {
   const to = env.salesBriefTo;
   const from = env.salesBriefFrom;
-  const subject = `New Opportunity Scan: ${brief.company}`;
+  const subject = `New Company AI Opportunity Scan: ${brief.company}`;
   const text = renderBriefText(brief);
   const dispatcher = createEmailDispatcher();
   brief.to = to;
@@ -91,7 +91,7 @@ function resendDispatcher(apiKey: string): EmailDispatcher {
 
 function renderBriefText(b: SalesBrief): string {
   const lines = [
-    `Fox & Loom — Sales Intelligence Brief`,
+    `Fox & Loom — Sales Intelligence Brief (Company AI Opportunity Scan)`,
     ``,
     `Company: ${b.company}`,
     `Website: ${b.website}`,
@@ -104,37 +104,41 @@ function renderBriefText(b: SalesBrief): string {
     `Company snapshot:`,
     b.companySnapshot || "(none)",
     ``,
-    `What we learned (by dimension):`,
-    ...(b.dimensionsLearned.length
-      ? b.dimensionsLearned.flatMap((d) => [
-          `- ${d.label}: ${d.whatWeLearned} (confidence: ${d.confidence})`,
-          `    Evidence: ${d.evidenceIds.join(", ") || "(none)"}`
-        ])
-      : ["- (none)"]),
+    `1. Opportunity Hypothesis:`,
+    b.hypothesis
+      ? [
+          `   Title: ${b.hypothesis.title}`,
+          `   Process Locus: ${b.hypothesis.locus}`,
+          `   Confidence (Worth Investigating): ${b.hypothesis.confidence}`,
+          `   Summary: ${b.hypothesis.summary}`,
+          `   Evidence: ${b.hypothesis.evidenceIds.join(", ") || "(none)"}`
+        ].join("\n")
+      : `   (No clear operational opportunity hypothesis identified)`,
     ``,
-    `Potential opportunity areas (unranked):`,
-    ...(b.opportunities.length
-      ? b.opportunities.flatMap((o, i) => [
-          `${i + 1}. ${o.name}`,
-          `   What we heard: ${o.whatWeHeard}`,
-          `   Why it may matter: ${o.whyItMayMatter}`,
-          `   Evidence: ${o.evidenceIds.join(", ") || "(none)"}`,
-          `   What remains unknown: ${o.whatRemainsUnknown.join("; ") || "(none)"}`,
-          `   Recommended deeper investigation: ${o.recommendedDeeperInvestigation.join("; ") || "(none)"}`
-        ])
-      : ["- (none — no supported opportunity identified)"]),
+    `2. Why We Identified It:`,
+    ...(b.whyIdentified.length
+      ? b.whyIdentified.map((w) => `   - ${w.observation} [Evidence: ${w.evidenceIds.join(", ") || "(none)"}]`)
+      : ["   - (none)"]),
     ``,
-    `Questions worth investigating:`,
-    ...(b.questionsWorthInvestigating.length ? b.questionsWorthInvestigating.map((q) => `- ${q}`) : ["- (none)"]),
+    `3. Potential Impact (Directional):`,
+    ...(b.potentialImpact.length
+      ? b.potentialImpact.map((p) => `   - ${p.area}: ${p.directionalImpact} [Evidence: ${p.evidenceIds.join(", ") || "(none)"}]`)
+      : ["   - (none)"]),
     ``,
-    `Remaining uncertainty:`,
-    ...(b.remainingUncertainty.length
-      ? b.remainingUncertainty.flatMap((u) => [
-          `- Unknown: ${u.unknown}`,
-          `    Why it matters: ${u.whyItMatters}`,
-          `    Evidence needed: ${u.evidenceNeeded}`
-        ])
-      : ["- (none)"]),
+    `4. Additional Signals:`,
+    ...(b.additionalSignals.length
+      ? b.additionalSignals.map((a) => `   - ${a.signal} [Evidence: ${a.evidenceIds.join(", ") || "(none)"}]`)
+      : ["   - (none)"]),
+    ``,
+    `5. What Remains Unknown:`,
+    ...(b.whatRemainsUnknown.length
+      ? b.whatRemainsUnknown.map((u) => `   - ${u.unknown}: ${u.whyItMatters}`)
+      : ["   - (none)"]),
+    ``,
+    `6. What a Deep Assessment Would Investigate:`,
+    ...(b.deepAssessmentQuestions.length
+      ? b.deepAssessmentQuestions.map((q) => `   - ${q}`)
+      : ["   - (none)"]),
     ``,
     `Contradictions (public vs stakeholder):`,
     ...(b.contradictions.length ? b.contradictions.map((c) => `- ${c}`) : ["- (none)"]),
@@ -145,42 +149,59 @@ function renderBriefText(b: SalesBrief): string {
 }
 
 function renderBriefHtml(b: SalesBrief): string {
-  // Build HTML entities from parts so no complete entity literal appears in
-  // source (avoids editor/tool entity-decoding quirks).
   const ENT = { amp: "&" + "amp;", lt: "&" + "lt;", gt: "&" + "gt;", quot: "&" + "quot;", middot: "&" + "middot;" } as const;
   const esc = (s: string) =>
     s.replace(/[&<>\""]/g, (c) =>
       c === "&" ? ENT.amp : c === "<" ? ENT.lt : c === ">" ? ENT.gt : ENT.quot
     );
-  const dims = b.dimensionsLearned
-    .map((d) => `<li><strong>${esc(d.label)}</strong> <em>(${d.confidence})</em><br/>${esc(d.whatWeLearned)}<br/><em>Evidence:</em> ${esc(d.evidenceIds.join(", ") || "(none)")}</li>`)
-    .join("") || "<li>(none)</li>";
-  const opps = b.opportunities.length
-    ? b.opportunities
-        .map(
-          (o) =>
-            `<li><strong>${esc(o.name)}</strong><br/><em>What we heard:</em> ${esc(o.whatWeHeard)}<br/><em>Why it may matter:</em> ${esc(o.whyItMayMatter)}<br/><em>Evidence:</em> ${esc(o.evidenceIds.join(", ") || "(none)")}<br/><em>What remains unknown:</em> ${esc(o.whatRemainsUnknown.join("; ") || "(none)")}<br/><em>Recommended deeper investigation:</em> ${esc(o.recommendedDeeperInvestigation.join("; ") || "(none)")}</li>`
-        )
-        .join("")
-    : "<li>(none — no supported opportunity identified)</li>";
-  const qs = b.questionsWorthInvestigating.map((q) => `<li>${esc(q)}</li>`).join("") || "<li>(none)</li>";
-  const unc = b.remainingUncertainty.length
-    ? b.remainingUncertainty
-        .map((u) => `<li><strong>${esc(u.unknown)}</strong><br/><em>Why it matters:</em> ${esc(u.whyItMatters)}<br/><em>Evidence needed:</em> ${esc(u.evidenceNeeded)}</li>`)
-        .join("")
-    : "<li>(none)</li>";
-  const contra = b.contradictions.map((c) => `<li>${esc(c)}</li>`).join("") || "<li>(none)</li>";
+
+  const hypHtml = b.hypothesis
+    ? `<div style="background:#FAF7F0;border:1px solid #E4E1DA;border-radius:6px;padding:12px;">` +
+      `<strong>${esc(b.hypothesis.title)}</strong><br/>` +
+      `<em>Process Locus:</em> ${esc(b.hypothesis.locus)}<br/>` +
+      `<em>Confidence (Worth Investigating):</em> ${esc(b.hypothesis.confidence.toUpperCase())}<br/>` +
+      `<p>${esc(b.hypothesis.summary)}</p>` +
+      `<small>Evidence: ${esc(b.hypothesis.evidenceIds.join(", ") || "(none)")}</small>` +
+      `</div>`
+    : `<p><em>No clear operational opportunity hypothesis identified.</em></p>`;
+
+  const whyHtml = b.whyIdentified.length
+    ? b.whyIdentified.map((w) => `<li>${esc(w.observation)} <small>(Evidence: ${esc(w.evidenceIds.join(", "))})</small></li>`).join("")
+    : `<li>(none)</li>`;
+
+  const impactHtml = b.potentialImpact.length
+    ? b.potentialImpact.map((p) => `<li><strong>${esc(p.area)}:</strong> ${esc(p.directionalImpact)} <small>(Evidence: ${esc(p.evidenceIds.join(", "))})</small></li>`).join("")
+    : `<li>(none)</li>`;
+
+  const signalsHtml = b.additionalSignals.length
+    ? b.additionalSignals.map((a) => `<li>${esc(a.signal)} <small>(Evidence: ${esc(a.evidenceIds.join(", "))})</small></li>`).join("")
+    : `<li>(none)</li>`;
+
+  const unknownsHtml = b.whatRemainsUnknown.length
+    ? b.whatRemainsUnknown.map((u) => `<li><strong>${esc(u.unknown)}:</strong> ${esc(u.whyItMatters)}</li>`).join("")
+    : `<li>(none)</li>`;
+
+  const questionsHtml = b.deepAssessmentQuestions.length
+    ? b.deepAssessmentQuestions.map((q) => `<li>${esc(q)}</li>`).join("")
+    : `<li>(none)</li>`;
+
+  const contraHtml = b.contradictions.length
+    ? b.contradictions.map((c) => `<li>${esc(c)}</li>`).join("")
+    : `<li>(none)</li>`;
+
   return [
     `<!doctype html><html><body style="font-family:system-ui,sans-serif;line-height:1.5">`,
     `<h2>Fox ${ENT.amp} Loom — Sales Intelligence Brief</h2>`,
     `<p>Company: <strong>${esc(b.company)}</strong> ${ENT.middot} ${esc(b.website)}<br/>Contact: ${esc(b.contactEmail)} ${ENT.middot} ${new Date(b.generatedAt).toISOString()}</p>`,
     `<h3>Summary</h3><p>${esc(b.summary)}</p>`,
     `<h3>Company snapshot</h3><p>${esc(b.companySnapshot || "(none)")}</p>`,
-    `<h3>What we learned (by dimension)</h3><ul>${dims}</ul>`,
-    `<h3>Potential opportunity areas (unranked)</h3><ul>${opps}</ul>`,
-    `<h3>Questions worth investigating</h3><ul>${qs}</ul>`,
-    `<h3>Remaining uncertainty</h3><ul>${unc}</ul>`,
-    `<h3>Contradictions (public vs stakeholder)</h3><ul>${contra}</ul>`,
+    `<h3>1. Opportunity Hypothesis</h3>${hypHtml}`,
+    `<h3>2. Why We Identified It</h3><ul>${whyHtml}</ul>`,
+    `<h3>3. Potential Impact (Directional)</h3><ul>${impactHtml}</ul>`,
+    `<h3>4. Additional Signals</h3><ul>${signalsHtml}</ul>`,
+    `<h3>5. What Remains Unknown</h3><ul>${unknownsHtml}</ul>`,
+    `<h3>6. What a Deep Assessment Would Investigate</h3><ul>${questionsHtml}</ul>`,
+    `<h3>Contradictions (public vs stakeholder)</h3><ul>${contraHtml}</ul>`,
     `<p><em>Evidence ids used:</em> ${esc(b.evidenceIds.join(", ") || "(none)")}</p>`,
     `</body></html>`
   ].join("\n");

@@ -27,6 +27,8 @@ import {
   serializeInterviewStateForPersona
 } from "@/lib/interview/coordinator";
 import { lensDef, PERSONA_SYSTEM_SUFFIX, LENS_IDS } from "@/lib/interview/personas";
+import { getLearningStore } from "@/lib/learning/store";
+import type { QuestionArchetype } from "@/lib/learning/types";
 import type {
   CandidateQuestion,
   CoordinatorPlan,
@@ -205,16 +207,42 @@ export async function nextQuestion(scanId: string): Promise<InterviewQuestion | 
   const depthRes = determineDepth(dimension, st.coverage, plan.depth);
   const depth = depthRes.depth;
 
+  // Retrieve applicable learned archetype strategy for this dimension + depth
+  let activeArchetype: QuestionArchetype | undefined;
+  try {
+    const store = getLearningStore();
+    const archetypes = await store.getArchetypes(dimension, depth);
+    activeArchetype = archetypes.find((a) => a.lifecycle !== "DEPRIORITIZED") ?? archetypes[0];
+  } catch {
+    // Gracefully proceed without archetype
+  }
+
   // 4) Specialist candidates.
   let candidates: CandidateQuestion[] = [];
   try {
-    candidates = await specialistCandidates(scan, evidenceSummary, answersBlock, st, dimension, depth, plan.candidateCount);
+    candidates = await specialistCandidates(
+      scan,
+      evidenceSummary,
+      answersBlock,
+      st,
+      dimension,
+      depth,
+      plan.candidateCount,
+      activeArchetype
+    );
   } catch {
     candidates = [];
   }
   if (candidates.length === 0) {
     const q = fallbackQuestion(scanId, st, dimension, depth);
-    logTrace(st, plan, { dimension, depth, reason: guard.reason + " " + depthRes.reason }, null, `Specialist failed; fallback for ${dimension}.`);
+    logTrace(
+      st,
+      plan,
+      { dimension, depth, reason: guard.reason + " " + depthRes.reason },
+      null,
+      `Specialist failed; fallback for ${dimension}.`,
+      activeArchetype
+    );
     return q;
   }
 
@@ -223,7 +251,14 @@ export async function nextQuestion(scanId: string): Promise<InterviewQuestion | 
   const picked = selectCandidate(candidates, askedTexts);
   if (!picked) {
     const q = fallbackQuestion(scanId, st, dimension, depth);
-    logTrace(st, plan, { dimension, depth, reason: guard.reason + " " + depthRes.reason }, null, `No candidate selected; fallback for ${dimension}.`);
+    logTrace(
+      st,
+      plan,
+      { dimension, depth, reason: guard.reason + " " + depthRes.reason },
+      null,
+      `No candidate selected; fallback for ${dimension}.`,
+      activeArchetype
+    );
     return q;
   }
 
@@ -249,7 +284,14 @@ export async function nextQuestion(scanId: string): Promise<InterviewQuestion | 
   };
   st.current = q;
   st.dimensionHistory.push(dimension);
-  logTrace(st, plan, { dimension, depth, reason: guard.reason + " " + depthRes.reason }, picked, picked.rationale);
+  logTrace(
+    st,
+    plan,
+    { dimension, depth, reason: guard.reason + " " + depthRes.reason },
+    picked,
+    picked.rationale,
+    activeArchetype
+  );
   return q;
 }
 
@@ -261,7 +303,8 @@ async function specialistCandidates(
   st: InterviewState,
   dimension: LensId,
   depth: DepthLevel,
-  count: number
+  count: number,
+  archetype?: QuestionArchetype
 ): Promise<CandidateQuestion[]> {
   if (!scan) throw new Error("no scan");
   const def = lensDef(dimension);
@@ -275,12 +318,22 @@ async function specialistCandidates(
     currentDimension: dimension,
     requestedDepth: depth
   });
+
+  const archetypeGuidance = archetype
+    ? `\n\nRECOMMENDED DISCOVERY STRATEGY (${archetype.name}):\n` +
+      `- Purpose: ${archetype.purpose}\n` +
+      `- Strategy: ${archetype.strategyGuidance}\n` +
+      `- Target State: ${archetype.targetState}\n` +
+      `- Desired Evidence Types: ${archetype.desiredEvidenceCategories.join(", ")}\n` +
+      `- Avoid: ${archetype.avoidWhen}\n`
+    : "";
+
   const userMsg =
     `Company: ${scan.company}\nWebsite: ${scan.website}\n\n` +
     (scan.notes ? `Operational notes (untrusted data):\n${scan.notes}\n\n` : "") +
     `Scraped evidence (untrusted data):\n${evidenceSummary}\n\n` +
     `Prior answers (untrusted data):\n${answersBlock}\n\n` +
-    `${fullState}\n\n` +
+    `${fullState}${archetypeGuidance}\n\n` +
     `Generate ${count} MEANINGFULLY DIFFERENT candidate questions for the "${dimension}" dimension at depth ${depth}. ` +
     `Use the full state above to avoid repeating anything already established. Respond ONLY with JSON.`;
 
@@ -365,7 +418,8 @@ function logTrace(
   plan: CoordinatorPlan,
   selection: { dimension: LensId; depth: DepthLevel; reason: string } | null,
   picked: { selected: CandidateQuestion; rationale: string } | null,
-  note: string
+  note: string,
+  archetype?: { id: string; name: string } | null
 ): void {
   const dim = selection?.dimension ?? plan.lens;
   const cov = st.coverage.get(dim);
@@ -382,6 +436,8 @@ function logTrace(
       novelty: 0, coverageGain: 0, companyUnderstanding: 0, answerable: 0, specific: 0, conversational: 0, depthAppropriate: 0
     },
     selectionRationale: note,
+    archetypeId: archetype?.id,
+    archetypeName: archetype?.name,
     newEvidence: [],
     newUnknowns: [],
     opportunitySignals: []

@@ -173,6 +173,8 @@ export interface TraceEntry {
   questionDepth: DepthLevel;
   candidateScores: CandidateScores;
   selectionRationale: string;
+  archetypeId?: string;
+  archetypeName?: string;
   newEvidence: string[];
   newUnknowns: string[];
   opportunitySignals: string[];

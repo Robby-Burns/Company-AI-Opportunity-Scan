@@ -3,6 +3,40 @@
 Living log of material implementation decisions (per spec §12.3). Routine
 choices (file layout, names) are not logged here. Newest entries at the top.
 
+## 2026-08-17 — Company AI Opportunity Scan Architecture & 6-Section Synthesis Alignment
+
+Locked in the 5-stage product lifecycle and aligned Tier 0 (Opportunity Scan) coordinator and synthesis with the official source of truth:
+
+### 1. 5-Stage Product Lifecycle
+* **1. Opportunity Scan**: *"Is there something here worth investigating?"* — Identify credible opportunities from limited evidence.
+* **2. Deep Assessment**: *"What opportunities actually matter, and is one worth pursuing?"* — Investigate, evaluate, and prioritize across 6 dimensions.
+* **3. Build Decision**: *"What should we build?"* — Implementation pathway decision.
+* **4. Atlas**: *"What is the evidence-supported specification?"* — Evidence-backed specification.
+* **5. Shipyard**: *"Can we build and deploy it correctly?"* — Deployment assurance execution.
+
+### 2. Governing Rule & Epistemic Boundary
+*"Specific enough that the prospect recognizes a real opportunity in their business, but incomplete enough that determining whether that opportunity is valuable, feasible, safe, and worth pursuing remains the purpose of the Deep Assessment."*
+
+### 3. Synthesis Engine & 6-Section Report Structure
+Transitioned from the 5-dimension readiness table to the 6-part executive brief:
+1. **Opportunity Hypothesis** (specific operational locus + confidence worth investigating).
+2. **Why We Identified It** (cited evidence from conversation/research).
+3. **Potential Impact** (directional operational magnitude, grounded in evidence; no ROI fabrication).
+4. **Additional Signals** (secondary opportunities or friction points).
+5. **What Remains Unknown** (structural, operational, and system blindspots).
+6. **What a Deep Assessment Would Investigate** (strictly diagnostic questions, prohibiting task/audit checklists).
+
+### 4. Coordinator Stopping Rule (Information Budget)
+* The 8–12 turn range is an information budget, not a conversational script.
+* At Question 8 (minimum threshold), evaluates whether evidence is sufficient to articulate a credible Opportunity Hypothesis; continues if significant uncertainty remains, and stops immediately once the hypothesis is backed. Hard stop at 12.
+
+### 5. Blast Radius & Downstream Integrations
+* Updated `ClientReport` and `SalesBrief` data contracts (`synthesis.ts`).
+* Updated `ClientSummaryPdf` (`client-summary-pdf.tsx`) to render the 6 structured sections with WinAnsi Helvetica safety.
+* Updated Sales Intelligence Brief text and HTML renderers (`email.ts`).
+* Updated Deep Assessment intake package payload (`createIntakePackage()`).
+* Added automated Boundary-Leakage (no vendors, architecture, or tasks) and Anti-Vagueness regression test suites.
+
 ## 2026-08-14 — Multi-perspective interview architecture (coordinator + specialist personas)
 
 Replaced the single-agent adaptive interview loop with a multi-perspective

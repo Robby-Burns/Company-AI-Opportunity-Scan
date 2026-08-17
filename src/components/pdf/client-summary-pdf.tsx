@@ -10,51 +10,42 @@ import {
 import type { ClientReport } from "@/lib/synthesis";
 import { content } from "@/content";
 
-// Use built-in Helvetica (no external font fetch → fast + offline). The friendly
-// tone comes from layout/copy, not font choice.
+// Use built-in Helvetica (fast + offline).
 const styles = StyleSheet.create({
-  page: { paddingTop: 48, paddingBottom: 56, paddingHorizontal: 48, fontFamily: "Helvetica", fontSize: 11, color: "#2A2D3A" },
-  header: { borderBottomWidth: 2, borderBottomColor: "#BF9036", paddingBottom: 12, marginBottom: 20 },
-  brand: { fontSize: 16, fontFamily: "Helvetica-Bold", color: "#2F3359" },
-  tagline: { fontSize: 9, color: "#6B6F7A", marginTop: 2 },
-  h1: { fontSize: 20, fontFamily: "Helvetica-Bold", color: "#2F3359", marginBottom: 6 },
-  meta: { fontSize: 9, color: "#6B6F7A", marginBottom: 18 },
-  sectionTitle: { fontSize: 12, fontFamily: "Helvetica-Bold", color: "#2F3359", marginTop: 14, marginBottom: 6 },
-  area: { borderWidth: 1, borderColor: "#E4E1DA", borderRadius: 6, padding: 12, marginBottom: 10, backgroundColor: "#FAF7F0" },
-  areaTitle: { fontSize: 12, fontFamily: "Helvetica-Bold", color: "#2F3359", marginBottom: 4 },
-  body: { fontSize: 10.5, lineHeight: 1.5 },
-  example: { fontSize: 10, color: "#5A5D6A", marginTop: 4, fontStyle: "italic" },
-  ev: { fontSize: 8, color: "#8A6A1F", marginTop: 6 },
-  perspective: { borderWidth: 1, borderColor: "#E4E1DA", borderRadius: 6, padding: 10, marginBottom: 8, backgroundColor: "#FFFFFF" },
-  perspectiveTitle: { fontSize: 11, fontFamily: "Helvetica-Bold", color: "#2F3359", marginBottom: 3 },
-  perspectiveBody: { fontSize: 10, lineHeight: 1.45, color: "#3A3D4A" },
-  perspectiveUncertainty: { fontSize: 9.5, color: "#6B6F7A", marginTop: 2, fontStyle: "italic" },
-  note: { fontSize: 10, color: "#5A5D6A", marginBottom: 4 },
-  footer: { position: "absolute", bottom: 28, left: 48, right: 48, fontSize: 8, color: "#9A9DA6", textAlign: "center", borderTopWidth: 1, borderTopColor: "#E4E1DA", paddingTop: 8 }
+  page: { paddingTop: 44, paddingBottom: 52, paddingHorizontal: 44, fontFamily: "Helvetica", fontSize: 10.5, color: "#2A2D3A" },
+  header: { borderBottomWidth: 2, borderBottomColor: "#BF9036", paddingBottom: 10, marginBottom: 16 },
+  brand: { fontSize: 15, fontFamily: "Helvetica-Bold", color: "#2F3359" },
+  tagline: { fontSize: 8.5, color: "#6B6F7A", marginTop: 2 },
+  h1: { fontSize: 18, fontFamily: "Helvetica-Bold", color: "#2F3359", marginBottom: 4 },
+  meta: { fontSize: 8.5, color: "#6B6F7A", marginBottom: 14 },
+  sectionTitle: { fontSize: 11.5, fontFamily: "Helvetica-Bold", color: "#2F3359", marginTop: 12, marginBottom: 5 },
+  card: { borderWidth: 1, borderColor: "#E4E1DA", borderRadius: 5, padding: 10, marginBottom: 8, backgroundColor: "#FAF7F0" },
+  cardTitle: { fontSize: 11, fontFamily: "Helvetica-Bold", color: "#2F3359", marginBottom: 3 },
+  badge: { fontSize: 8, color: "#8A6A1F", fontFamily: "Helvetica-Bold", marginBottom: 3 },
+  body: { fontSize: 10, lineHeight: 1.45, color: "#2A2D3A" },
+  bodyMuted: { fontSize: 9.5, lineHeight: 1.4, color: "#5A5D6A", marginTop: 2 },
+  ev: { fontSize: 7.5, color: "#8A6A1F", marginTop: 4 },
+  bullet: { fontSize: 9.5, lineHeight: 1.4, color: "#3A3D4A", marginBottom: 3 },
+  footer: { position: "absolute", bottom: 24, left: 44, right: 44, fontSize: 7.5, color: "#9A9DA6", textAlign: "center", borderTopWidth: 1, borderTopColor: "#E4E1DA", paddingTop: 6 }
 });
 
-void Font; // Font kept available for future custom-font swap; built-in used now.
+void Font;
 
 /**
- * The PDF uses the built-in Helvetica (PDF standard-14 font, WinAnsiEncoding
- * only). LLM-generated text can contain characters outside that set
- * (e.g. "→", "✓", emoji), which crash @react-pdf/renderer's text engine
- * ("Cannot read properties of undefined (reading 'S')"). This normalizes
- * common Unicode punctuation to ASCII and strips anything else outside
- * ASCII so the PDF always renders, regardless of model output.
+ * Standardize Unicode characters for WinAnsi Helvetica PDF rendering.
  */
 function s(value: string | undefined | null): string {
   if (value == null) return "";
   return String(value)
     .replace(/[\u2192\u279C\u2794\u25B6\u21D2\u27A4]/g, "->")
-    .replace(/[\u2014\u2013]/g, "-") // em/en dash
+    .replace(/[\u2014\u2013]/g, "-")
     .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
     .replace(/[\u201C\u201D\u201E\u201F]/g, "\"")
-    .replace(/\u2026/g, "...") // ellipsis
-    .replace(/[\u2022\u25AA\u25CF]/g, "-") // bullet
-    .replace(/[\u2713\u2714\u2717\u2718]/g, "*") // check / cross
-       .replace(/[\u00B7]/g, "·") // middle dot is WinAnsi-safe; keep
-    .replace(/[^\x00-\x7F\u00B7]/g, "") // strip remaining non-ASCII
+    .replace(/\u2026/g, "...")
+    .replace(/[\u2022\u25AA\u25CF]/g, "-")
+    .replace(/[\u2713\u2714\u2717\u2718]/g, "*")
+    .replace(/[\u00B7]/g, "·")
+    .replace(/[^\x00-\x7F\u00B7]/g, "")
     .trim();
 }
 
@@ -64,11 +55,12 @@ export function ClientSummaryPdf({ report }: { report: ClientReport }) {
     month: "long",
     day: "numeric"
   });
+
   return (
     <Document
-      title={`${report.company} — AI Readiness Summary`}
+      title={`${report.company} — Company AI Opportunity Scan`}
       author={content.orgName}
-      subject="Client AI Readiness Summary"
+      subject="Company AI Opportunity Scan"
     >
       <Page size="A4" style={styles.page}>
         <View style={styles.header} fixed>
@@ -83,112 +75,123 @@ export function ClientSummaryPdf({ report }: { report: ClientReport }) {
 
         {/* Company snapshot */}
         {report.companySnapshot ? (
-          <>
-            <Text style={styles.sectionTitle}>Company snapshot</Text>
+          <View style={{ marginBottom: 8 }}>
             <Text style={styles.body}>{s(report.companySnapshot)}</Text>
-          </>
+          </View>
         ) : null}
 
-        {/* What we learned — dimension table */}
-        <Text style={styles.sectionTitle}>What we learned</Text>
-        {report.dimensionsLearned.length === 0 ? (
-          <Text style={styles.body}>
-            We did not capture enough supported detail across the five discovery
-            dimensions to summarize here. A short call would help us learn more.
-          </Text>
+        {/* 1. Opportunity Hypothesis */}
+        <Text style={styles.sectionTitle}>1. Opportunity Hypothesis</Text>
+        {report.hypothesis ? (
+          <View style={styles.card}>
+            <Text style={styles.badge}>
+              CONFIDENCE (WORTH INVESTIGATING): {s(report.hypothesis.confidence.toUpperCase())}
+            </Text>
+            <Text style={styles.cardTitle}>{s(report.hypothesis.title)}</Text>
+            <Text style={styles.body}>
+              <Text style={{ fontFamily: "Helvetica-Bold" }}>Process Locus: </Text>
+              {s(report.hypothesis.locus)}
+            </Text>
+            <Text style={[styles.body, { marginTop: 3 }]}>{s(report.hypothesis.summary)}</Text>
+            {report.hypothesis.evidenceIds.length > 0 ? (
+              <Text style={styles.ev}>Evidence: {s(report.hypothesis.evidenceIds.join(", "))}</Text>
+            ) : null}
+          </View>
         ) : (
-          report.dimensionsLearned.map((d, i) => (
-            <View key={`d${i}`} style={styles.area}>
-              <Text style={styles.areaTitle}>
-                {d.label} · confidence: {d.confidence}
-              </Text>
-              <Text style={styles.body}>{s(d.whatWeLearned)}</Text>
-              {d.evidenceIds.length > 0 ? (
-                <Text style={styles.ev}>Evidence: {s(d.evidenceIds.join(", "))}</Text>
+          <View style={styles.card}>
+            <Text style={styles.body}>
+              The scan did not surface a clearly supported opportunity hypothesis. That is a valid
+              and positive outcome — not every operational area needs an immediate technology intervention.
+            </Text>
+          </View>
+        )}
+
+        {/* 2. Why We Identified It */}
+        <Text style={styles.sectionTitle}>2. Why We Identified It</Text>
+        {report.whyIdentified.length === 0 ? (
+          <Text style={styles.body}>Evidence captured in the scan did not indicate acute friction.</Text>
+        ) : (
+          report.whyIdentified.map((w, i) => (
+            <View key={`w${i}`} style={{ marginBottom: 4 }}>
+              <Text style={styles.bullet}>• {s(w.observation)}</Text>
+              {w.evidenceIds.length > 0 ? (
+                <Text style={[styles.ev, { marginLeft: 8 }]}>Evidence: {s(w.evidenceIds.join(", "))}</Text>
               ) : null}
             </View>
           ))
         )}
 
-        {/* Potential opportunity areas */}
-        <View break={report.dimensionsLearned.length >= 3}>
-          <Text style={styles.sectionTitle}>Potential opportunity areas (unranked)</Text>
-          {report.opportunities.length === 0 ? (
-            <Text style={styles.body}>
-              The interview did not surface a clearly supported opportunity worth deeper
-              investigation. That is a valid outcome — not every company needs AI or
-              automation right now.
-            </Text>
-          ) : (
-            report.opportunities.map((o, i) => (
-              <View key={`o${i}`} style={styles.area} break={i > 0 && i % 2 === 0}>
-                <Text style={styles.areaTitle}>
-                  {i + 1}. {s(o.name)}
-                </Text>
-                <Text style={styles.body}>
-                  <Text style={{ fontFamily: "Helvetica-Bold" }}>What we heard: </Text>
-                  {s(o.whatWeHeard)}
-                </Text>
-                <Text style={styles.body}>
-                  <Text style={{ fontFamily: "Helvetica-Bold" }}>Why it may matter: </Text>
-                  {s(o.whyItMayMatter)}
-                </Text>
-                <Text style={styles.ev}>Evidence: {s(o.evidenceIds.join(", "))}</Text>
-                {o.whatRemainsUnknown.length > 0 ? (
-                  <Text style={styles.example}>
-                    What remains unknown: {s(o.whatRemainsUnknown.join("; "))}
-                  </Text>
-                ) : null}
-                {o.recommendedDeeperInvestigation.length > 0 ? (
-                  <Text style={styles.example}>
-                    Recommended deeper investigation: {s(o.recommendedDeeperInvestigation.join("; "))}
-                  </Text>
+        {/* 3. Potential Impact */}
+        <Text style={styles.sectionTitle}>3. Potential Impact (Directional)</Text>
+        {report.potentialImpact.length === 0 ? (
+          <Text style={styles.body}>Directional impact will be evaluated during the Deep Assessment.</Text>
+        ) : (
+          report.potentialImpact.map((p, i) => (
+            <View key={`p${i}`} style={{ marginBottom: 4 }}>
+              <Text style={styles.bullet}>
+                • <Text style={{ fontFamily: "Helvetica-Bold" }}>{s(p.area)}: </Text>
+                {s(p.directionalImpact)}
+              </Text>
+              {p.evidenceIds.length > 0 ? (
+                <Text style={[styles.ev, { marginLeft: 8 }]}>Evidence: {s(p.evidenceIds.join(", "))}</Text>
+              ) : null}
+            </View>
+          ))
+        )}
+
+        {/* 4. Additional Signals */}
+        {report.additionalSignals.length > 0 ? (
+          <View>
+            <Text style={styles.sectionTitle}>4. Additional Signals</Text>
+            {report.additionalSignals.map((a, i) => (
+              <View key={`a${i}`} style={{ marginBottom: 4 }}>
+                <Text style={styles.bullet}>• {s(a.signal)}</Text>
+                {a.evidenceIds.length > 0 ? (
+                  <Text style={[styles.ev, { marginLeft: 8 }]}>Evidence: {s(a.evidenceIds.join(", "))}</Text>
                 ) : null}
               </View>
-            ))
-          )}
-        </View>
+            ))}
+          </View>
+        ) : null}
 
-        {/* Questions worth investigating */}
-        {report.questionsWorthInvestigating.length > 0 ? (
-          <View break={report.opportunities.length >= 2}>
-            <Text style={styles.sectionTitle}>Questions worth investigating</Text>
-            {report.questionsWorthInvestigating.map((q, i) => (
-              <Text key={`q${i}`} style={styles.note}>
+        {/* 5. What Remains Unknown */}
+        {report.whatRemainsUnknown.length > 0 ? (
+          <View break={report.additionalSignals.length > 2}>
+            <Text style={styles.sectionTitle}>5. What Remains Unknown</Text>
+            {report.whatRemainsUnknown.map((u, i) => (
+              <View key={`u${i}`} style={{ marginBottom: 4 }}>
+                <Text style={styles.bullet}>
+                  • <Text style={{ fontFamily: "Helvetica-Bold" }}>{s(u.unknown)}: </Text>
+                  {s(u.whyItMatters)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {/* 6. What a Deep Assessment Would Investigate */}
+        {report.deepAssessmentQuestions.length > 0 ? (
+          <View>
+            <Text style={styles.sectionTitle}>6. What a Deep Assessment Would Investigate</Text>
+            {report.deepAssessmentQuestions.map((q, i) => (
+              <Text key={`q${i}`} style={styles.bullet}>
                 • {s(q)}
               </Text>
             ))}
           </View>
         ) : null}
 
-        {/* Remaining uncertainty */}
-        {report.remainingUncertainty.length > 0 ? (
-          <View>
-            <Text style={styles.sectionTitle}>Remaining uncertainty</Text>
-            {report.remainingUncertainty.map((u, i) => (
-              <View key={`u${i}`} style={styles.perspective}>
-                <Text style={styles.perspectiveTitle}>Unknown: {s(u.unknown)}</Text>
-                <Text style={styles.perspectiveBody}>
-                  <Text style={{ fontFamily: "Helvetica-Bold" }}>Why it matters: </Text>
-                  {s(u.whyItMatters)}
-                </Text>
-                <Text style={styles.perspectiveBody}>
-                  <Text style={{ fontFamily: "Helvetica-Bold" }}>Evidence needed: </Text>
-                  {s(u.evidenceNeeded)}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        <Text style={styles.sectionTitle}>What&apos;s next</Text>
-        <Text style={styles.body}>
-          {s(report.whatsNext)}{" "}
-          <Link src="https://foxandloom.com/contact">foxandloom.com/contact</Link>
-        </Text>
+        {/* Next Steps */}
+        <View style={{ marginTop: 10 }}>
+          <Text style={styles.sectionTitle}>What&apos;s Next</Text>
+          <Text style={styles.body}>
+            {s(report.whatsNext)}{" "}
+            <Link src="https://foxandloom.com/contact">foxandloom.com/contact</Link>
+          </Text>
+        </View>
 
         <Text style={styles.footer} fixed>
-          {content.orgName} · {content.contactInfo.phone} · Generated {date}. Every claim in this report is traced to stored
+          {content.orgName} · {content.contactInfo.phone} · Generated {date}. Every claim in this report traces to stored
           evidence; unsupported claims are omitted.
         </Text>
       </Page>

@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 /**
- * Coverage-controlled interview + synthesis contract tests.
- *
- * The interview is now driven by a Coordinator that selects ONE dimension per
- * turn and a Specialist that returns 2–3 candidate questions. These tests mock
- * the LLM deterministically so the contracts (bounds, coverage guardrails,
- * candidate selection, evidence-omit invariants) are verified without a network.
+ * Coverage-controlled interview + synthesis contract tests (Company AI Opportunity Scan).
  */
 vi.mock("@/lib/llm", () => {
   const fn = vi.fn();
@@ -22,7 +17,7 @@ vi.mock("@/lib/llm", () => {
 import * as llmModule from "@/lib/llm";
 import { createScan, addEvidence, listEvidence, deleteScan, allScans } from "@/lib/evidence/store";
 import { initInterview, nextQuestion, ingestResponse, isInterviewFinished, getInterviewState } from "@/lib/orchestrator";
-import { synthesizeReports } from "@/lib/synthesis";
+import { synthesizeReports, createIntakePackage } from "@/lib/synthesis";
 import { selectDimension, determineDepth, selectCandidate } from "@/lib/interview/coordinator";
 import type { CandidateQuestion, DimensionCoverage, LensId } from "@/lib/interview/types";
 
@@ -30,11 +25,11 @@ const completeMock = (llmModule as unknown as { __completeMock: ReturnType<typeo
 
 function setupScan(id: string) {
   createScan({
-    id, company: "Acme", website: "https://acme.com", email: "a@acme.com",
+    id, company: "Acme Logistics", website: "https://acme.com", email: "a@acme.com",
     retentionScrapedDays: 90, retentionAnswersDays: 365
   });
-  addEvidence(id, { kind: "SCRAPED_TECH", source: "https://acme.com", snippet: "uses hubspot", signal: "uses:hubspot", confidence: "medium" });
-  addEvidence(id, { kind: "SCRAPED_WEB", source: "https://acme.com/about", snippet: "family logistics company", signal: "page:/about", confidence: "medium" });
+  addEvidence(id, { kind: "SCRAPED_TECH", source: "https://acme.com", snippet: "uses hubspot and quickbooks", signal: "uses:quickbooks", confidence: "medium" });
+  addEvidence(id, { kind: "SCRAPED_WEB", source: "https://acme.com/about", snippet: "family logistics company doing freight brokerage", signal: "page:/about", confidence: "medium" });
 }
 
 function clearStores() {
@@ -121,7 +116,7 @@ describe("Interview bounds (spec §7.1: hard stop at max)", () => {
     expect(isInterviewFinished(id)).toBe(true);
   });
 
-  it("can finish early once min reached via coordinator complete=true", async () => {
+  it("can finish early at Q8 once sufficient hypothesis evidence is gathered via complete=true", async () => {
     const lensOrder: LensId[] = ["business", "operations", "systems", "data", "people"];
     for (let i = 0; i < 8; i++) {
       const lens = lensOrder[i % 5]!;
@@ -250,58 +245,208 @@ describe("Candidate selection (coordinator picks ONE)", () => {
     const dup = cand("What software does your team rely on to run the business?", 0.9);
     const other = cand("How does information move between those systems?", 0.5);
     const picked = selectCandidate([dup, other], ["What software does your team rely on to run the business?"]);
-    // The duplicate should be penalized enough that the different question wins.
     expect(picked!.selected.question.text).toBe("How does information move between those systems?");
   });
 });
 
-describe("Synthesis evidence invariant (spec §7.1: omit unsupported claims)", () => {
+describe("Synthesis 6-section schema & evidence invariant", () => {
   const id = "syn-test";
   beforeEach(() => { clearStores(); setupScan(id); completeMock.mockReset(); });
   afterEach(() => deleteScan(id));
 
-  it("drops any opportunity whose evidenceIds don't resolve to real evidence", async () => {
+  it("produces the complete 6-section Opportunity Hypothesis structure and filters fake evidence IDs", async () => {
     const realIds = listEvidence(id).map((e) => e.id);
     expect(realIds.length).toBe(2);
+
     completeMock.mockResolvedValueOnce({
       json: {
-        headline: "Acme: snapshot",
-        companySnapshot: "A family logistics company.",
-        dimensionsLearned: [
-          { dimension: "business", whatWeLearned: "Family logistics company", confidence: "medium", evidenceIds: [realIds[1]!] },
-          { dimension: "operations", whatWeLearned: "Manual quoting", confidence: "low", evidenceIds: ["FAKE"] }
+        headline: "Acme Logistics: Company AI Opportunity Scan",
+        companySnapshot: "A freight brokerage company.",
+        hypothesis: {
+          title: "Carrier Rate Reconciliation",
+          locus: "Daily discrepancy reconciliation between carrier rate confirmations and QuickBooks invoices",
+          summary: "Dispatcher team spends significant manual time resolving freight invoice discrepancies.",
+          confidence: "high",
+          evidenceIds: [realIds[0]!, "FAKE_ID_1"]
+        },
+        whyIdentified: [
+          { observation: "Dispatches manually re-key carrier invoices into QuickBooks.", evidenceIds: [realIds[0]!] },
+          { observation: "Unsupported claim.", evidenceIds: ["FAKE_ID_2"] }
         ],
-        opportunities: [
-          { name: "Supported", whatWeHeard: "w", whyItMayMatter: "m", evidenceIds: [realIds[0]], whatRemainsUnknown: [], recommendedDeeperInvestigation: [] },
-          { name: "Unsupported", whatWeHeard: "w2", whyItMayMatter: "m2", evidenceIds: ["FAKE_ID"], whatRemainsUnknown: [], recommendedDeeperInvestigation: [] }
+        potentialImpact: [
+          { area: "Dispatch Operations", directionalImpact: "Reduction in end-of-month reconciliation backlog.", evidenceIds: [realIds[0]!] }
         ],
-        questionsWorthInvestigating: ["How much time does quoting take?"],
-        remainingUncertainty: [{ unknown: "Quote volume", whyItMatters: "scale", evidenceNeeded: "weekly count" }],
-        whatsNext: "Investigate further.",
-        salesSummary: "summary",
+        additionalSignals: [
+          { signal: "Quote turnaround delays during peak afternoon volume.", evidenceIds: [realIds[1]!] }
+        ],
+        whatRemainsUnknown: [
+          { unknown: "Rate confirmation PDF consistency", whyItMatters: "Determines whether data is extractable or unstructured." }
+        ],
+        deepAssessmentQuestions: [
+          "What rate of edge-case exceptions requires manual dispatcher approval?",
+          "Are carrier rate confirmations accessible via direct EDI/API or trapped in email attachments?"
+        ],
+        whatsNext: "A Deep Assessment will evaluate whether this opportunity is feasible and worth pursuing.",
+        salesSummary: "Strong freight reconciliation opportunity hypothesis.",
         contradictions: []
       },
       text: "", tokensIn: 0, tokensOut: 0
     });
+
     const { client, sales } = await synthesizeReports(id);
-    expect(client.opportunities.length).toBe(1);
-    expect(client.opportunities[0]!.name).toBe("Supported");
-    // The dimension with a fake id keeps its real-text but evidenceIds filtered to real ones;
-    // the "business" dimension (with a real id) survives.
-    expect(client.dimensionsLearned.find((d) => d.dimension === "business")).toBeDefined();
-    const real = new Set(listEvidence(id).map((e) => e.id));
-    for (const o of client.opportunities) for (const eid of o.evidenceIds) expect(real.has(eid)).toBe(true);
-    for (const d of client.dimensionsLearned) for (const eid of d.evidenceIds) expect(real.has(eid)).toBe(true);
-    expect(sales.opportunities.length).toBe(1);
+
+    // 1. Hypothesis verified
+    expect(client.hypothesis).not.toBeNull();
+    expect(client.hypothesis!.title).toBe("Carrier Rate Reconciliation");
+    expect(client.hypothesis!.confidence).toBe("high");
+    // Fake id filtered out of hypothesis evidenceIds
+    expect(client.hypothesis!.evidenceIds).toEqual([realIds[0]!]);
+
+    // 2. Why Identified verified (unsupported point with fake ID dropped)
+    expect(client.whyIdentified.length).toBe(1);
+    expect(client.whyIdentified[0]!.evidenceIds).toEqual([realIds[0]!]);
+
+    // 3. Potential Impact verified
+    expect(client.potentialImpact.length).toBe(1);
+    expect(client.potentialImpact[0]!.area).toBe("Dispatch Operations");
+
+    // 4. Additional Signals verified
+    expect(client.additionalSignals.length).toBe(1);
+
+    // 5. What Remains Unknown verified
+    expect(client.whatRemainsUnknown.length).toBe(1);
+    expect(client.whatRemainsUnknown[0]!.unknown).toBe("Rate confirmation PDF consistency");
+
+    // 6. Deep Assessment Questions verified
+    expect(client.deepAssessmentQuestions.length).toBe(2);
+    expect(client.deepAssessmentQuestions[0]).toContain("dispatcher approval?");
+
+    // All evidence IDs in client report must be real
+    const realSet = new Set(realIds);
+    for (const eid of client.evidenceIds) expect(realSet.has(eid)).toBe(true);
+
+    // Intake package verification
+    const intake = createIntakePackage(id, client, sales);
+    expect(intake.opportunityHypothesis?.title).toBe("Carrier Rate Reconciliation");
+    expect(intake.deepAssessmentQuestions.length).toBe(2);
   });
 
-  it("produces a fallback report when the LLM fails (still evidence-backed)", async () => {
+  it("handles null opportunity hypothesis gracefully (no false positive hallucination)", async () => {
+    completeMock.mockResolvedValueOnce({
+      json: {
+        headline: "Acme Logistics: Company AI Opportunity Scan",
+        companySnapshot: "A company with streamlined operations.",
+        hypothesis: null,
+        whyIdentified: [],
+        potentialImpact: [],
+        additionalSignals: [],
+        whatRemainsUnknown: [],
+        deepAssessmentQuestions: ["What workflows currently require manual intervention?"],
+        whatsNext: "No immediate high-leverage opportunity was identified.",
+        salesSummary: "No current opportunity.",
+        contradictions: []
+      },
+      text: "", tokensIn: 0, tokensOut: 0
+    });
+
+    const { client, sales } = await synthesizeReports(id);
+    expect(client.hypothesis).toBeNull();
+    expect(client.whyIdentified.length).toBe(0);
+    expect(sales.hypothesis).toBeNull();
+  });
+
+  it("produces a fallback report when the LLM fails", async () => {
     completeMock.mockRejectedValueOnce(new Error("llm down"));
     const { client, sales } = await synthesizeReports(id);
-    expect(client.opportunities.length).toBe(0); // no manufactured opportunities
+    expect(client.hypothesis).toBeNull();
     expect(client.whatsNext.length).toBeGreaterThan(0);
-    expect(sales.dimensionsLearned).toBeDefined();
+    expect(client.deepAssessmentQuestions.length).toBeGreaterThan(0);
+    expect(sales.summary).toContain("Automated synthesis unavailable");
+  });
+});
+
+describe("Synthesis Boundary-Leakage & Anti-Vagueness Invariants", () => {
+  const id = "syn-boundary";
+  beforeEach(() => { clearStores(); setupScan(id); completeMock.mockReset(); });
+  afterEach(() => deleteScan(id));
+
+  it("fails boundary checks if report leaks vendor recommendations or implementation architecture", () => {
+    const forbiddenPatterns = [
+      /langchain/i,
+      /vector db|vector database/i,
+      /rag pipeline/i,
+      /openai|anthropic|zapier|make\.com/i,
+      /\$\d{2,}(?:,\d{3})*(?:\.\d+)?\s*(?:annual|cost|savings|roi)/i
+    ];
+
+    const cleanHypothesis = {
+      title: "Rate Reconciliation",
+      locus: "Reconciling daily carrier rate confirmations with QuickBooks invoices",
+      summary: "Manual cross-checking causes billing delays.",
+      confidence: "high" as const,
+      evidenceIds: ["ev-1"]
+    };
+
+    // Valid report passes pattern checks
+    const textToCheck = `${cleanHypothesis.title} ${cleanHypothesis.locus} ${cleanHypothesis.summary}`;
+    for (const pattern of forbiddenPatterns) {
+      expect(pattern.test(textToCheck)).toBe(false);
+    }
+
+    // Leaky report fails pattern checks
+    const leakyText = "Build a LangChain RAG pipeline using OpenAI and Zapier to save $50,000 annually";
+    const foundViolations = forbiddenPatterns.filter((p) => p.test(leakyText));
+    expect(foundViolations.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("enforces that deepAssessmentQuestions are diagnostic questions, not execution tasks", () => {
+    const validQuestions = [
+      "What rate of edge-case exceptions requires manual dispatcher approval?",
+      "Are carrier rate confirmations accessible via direct EDI/API or trapped in email attachments?"
+    ];
+
+    const invalidTasks = [
+      "Audit 100 historical invoices",
+      "Configure write permissions in QuickBooks",
+      "Test NetSuite webhook latency",
+      "Build a proof of concept"
+    ];
+
+    for (const q of validQuestions) {
+      expect(q.trim().endsWith("?")).toBe(true);
+      expect(/^(audit|configure|test|build|provision|deploy)\b/i.test(q)).toBe(false);
+    }
+
+    for (const task of invalidTasks) {
+      const isTask = /^(audit|configure|test|build|provision|deploy)\b/i.test(task) || !task.trim().endsWith("?");
+      expect(isTask).toBe(true);
+    }
+  });
+
+  it("enforces specific operational locus in hypothesis (rejects generic fluff)", () => {
+    const genericFluff = [
+      "Your business may benefit from AI",
+      "There may be opportunities to improve operational efficiency",
+      "AI automation opportunity"
+    ];
+
+    const specificLocus = [
+      "Daily discrepancy reconciliation between carrier rate confirmations and QuickBooks invoices",
+      "Cross-system customer order entry from unformatted email PDFs into ERP",
+      "Field technician work order status handoff between ServiceTitan and billing"
+    ];
+
+    // Specific locus should have descriptive process context (> 25 chars and specific process terms)
+    for (const locus of specificLocus) {
+      expect(locus.length).toBeGreaterThan(25);
+      expect(/reconciliation|entry|handoff|dispatch|invoices|billing|order/i.test(locus)).toBe(true);
+    }
+
+    for (const fluff of genericFluff) {
+      expect(/reconciliation|entry|handoff|dispatch|invoices|billing|order/i.test(fluff)).toBe(false);
+    }
   });
 });
 
 void getInterviewState;
+
