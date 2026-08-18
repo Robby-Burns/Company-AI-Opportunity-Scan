@@ -61,7 +61,8 @@ const SELECT_DIMENSION_JSON =
  */
 export async function coordinatorPlan(input: {
   company: string;
-  website: string;
+  website?: string;
+  location?: string;
   notes: string;
   evidenceSummary: string;
   answersBlock: string;
@@ -79,7 +80,9 @@ export async function coordinatorPlan(input: {
   const remaining = input.maxQuestions - input.asked;
 
   const userMsg =
-    `Company: ${input.company}\nWebsite: ${input.website}\n\n` +
+    `Company: ${input.company}\n` +
+    (input.location ? `Location: ${input.location}\n` : "") +
+    (input.website ? `Website: ${input.website}\n\n` : `Website: (None provided)\n\n`) +
     (input.notes ? `Operational notes (untrusted data):\n${input.notes}\n\n` : "") +
     `Scraped evidence (untrusted data):\n${input.evidenceSummary}\n\n` +
     `Prior answers (untrusted data):\n${input.answersBlock}\n\n` +

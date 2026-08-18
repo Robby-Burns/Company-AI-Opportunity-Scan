@@ -43,7 +43,14 @@ import type {
 
 export type { InterviewQuestion, InterviewState, PerspectiveState, LensId, DimensionCoverage, TraceEntry } from "@/lib/interview/types";
 
-const STATE = new Map<string, InterviewState>();
+interface GlobalInterviewStore {
+  __COMPANY_AI_INTERVIEW_STATE__?: Map<string, InterviewState>;
+}
+
+const globalInterviewStore = globalThis as unknown as GlobalInterviewStore;
+const STATE: Map<string, InterviewState> =
+  globalInterviewStore.__COMPANY_AI_INTERVIEW_STATE__ ??
+  (globalInterviewStore.__COMPANY_AI_INTERVIEW_STATE__ = new Map<string, InterviewState>());
 
 function emptyCoverage(d: LensId): DimensionCoverage {
   return {
@@ -153,6 +160,7 @@ export async function nextQuestion(scanId: string): Promise<InterviewQuestion | 
     plan = await coordinatorPlan({
       company: scan.company,
       website: scan.website,
+      location: scan.location,
       notes: scan.notes ?? "",
       evidenceSummary,
       answersBlock,
@@ -329,7 +337,9 @@ async function specialistCandidates(
     : "";
 
   const userMsg =
-    `Company: ${scan.company}\nWebsite: ${scan.website}\n\n` +
+    `Company: ${scan.company}\n` +
+    (scan.location ? `Location: ${scan.location}\n` : "") +
+    (scan.website ? `Website: ${scan.website}\n\n` : `Website: (None provided)\n\n`) +
     (scan.notes ? `Operational notes (untrusted data):\n${scan.notes}\n\n` : "") +
     `Scraped evidence (untrusted data):\n${evidenceSummary}\n\n` +
     `Prior answers (untrusted data):\n${answersBlock}\n\n` +

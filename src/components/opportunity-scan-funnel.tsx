@@ -63,6 +63,7 @@ export function OpportunityScanFunnel() {
 
   // ── Step 1: submit input ─────────────────────────────────────────────
   const [company, setCompany] = React.useState("");
+  const [location, setLocation] = React.useState("");
   const [website, setWebsite] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [notes, setNotes] = React.useState("");
@@ -76,12 +77,16 @@ export function OpportunityScanFunnel() {
 
   async function startScan(e: React.FormEvent) {
     e.preventDefault();
+    if (!company.trim() || !email.trim()) {
+      toast({ title: "Please provide your company name and email", variant: "destructive" });
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch("/api/scan", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ company, website, email, notes, confirmed, challenge })
+        body: JSON.stringify({ company, location, website, email, notes, confirmed, challenge })
       });
       const data = (await res.json()) as { scanId?: string; error?: string; remaining?: number };
       if (!res.ok || !data.scanId) {
@@ -246,6 +251,7 @@ export function OpportunityScanFunnel() {
   function restart() {
     setSt(INITIAL);
     setCompany("");
+    setLocation("");
     setWebsite("");
     setEmail("");
     setNotes("");
@@ -269,21 +275,28 @@ export function OpportunityScanFunnel() {
                 <Input id="company" value={company} onChange={(e) => setCompany(e.target.value)} required maxLength={120} autoComplete="organization" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="website">Company website</Label>
-                <Input id="website" type="url" inputMode="url" value={website} onChange={(e) => setWebsite(e.target.value)} required placeholder="https://yourcompany.com" autoComplete="url" />
+                <Label htmlFor="location">Location (City, State / Region)</Label>
+                <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} maxLength={120} placeholder="e.g. Austin, TX or Chicago, IL (optional)" autoComplete="address-level2" />
+                <p className="text-xs text-muted-foreground">
+                  Helps us understand your operating area, especially if you don&apos;t have a website.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="website">Company website (optional)</Label>
+                <Input id="website" type="url" inputMode="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://yourcompany.com (optional)" autoComplete="url" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Your work email</Label>
                 <Input id="email" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
                 <p className="text-xs text-muted-foreground">
-                  We check this against the website to confirm you represent the company.
+                  Where we&apos;ll send your summary and follow-up notes.
                 </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="notes">Anything we should know? (optional)</Label>
                 <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} placeholder="E.g. 'We're a 12-person logistics firm exploring automation.'" />
               </div>
-              <label className="flex items-start gap-3 text-sm">
+              <label className="flex items-start gap-3 text-sm cursor-pointer">
                 <input
                   type="checkbox"
                   checked={confirmed}

@@ -79,4 +79,18 @@ describe("Evidence store (spec §7.1, §13)", () => {
     expect(remaining.length).toBe(1);
     expect(remaining[0]!.kind).toBe("PROSPECT_REPORTED");
   });
+
+  it("supports creating scan with location and without website", () => {
+    const s = createScan({
+      id: "no-web",
+      company: "Joe's Plumbing",
+      location: "Austin, TX",
+      email: "joe@gmail.com",
+      retentionScrapedDays: 90,
+      retentionAnswersDays: 365
+    });
+    expect(s.website).toBe("");
+    expect(s.location).toBe("Austin, TX");
+    expect(getScan("no-web")?.location).toBe("Austin, TX");
+  });
 });

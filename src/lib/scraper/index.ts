@@ -28,7 +28,7 @@ export interface ScraperProgress {
 
 export interface ScraperInput {
   scanId: string;
-  website: string; // already SSRF-validated URL
+  website?: string; // already SSRF-validated URL, if present
   timeoutMs: number;
 }
 
@@ -46,6 +46,14 @@ const NAV_PATHS = ["", "about", "services", "careers", "contact", "team", "produ
  */
 export async function runScraper(input: ScraperInput, onProgress: ProgressCb): Promise<ScraperResult> {
   const warnings: string[] = [];
+  const website = (input.website ?? "").trim();
+
+  if (!website) {
+    onProgress({ step: "start", message: "No website provided. Preparing interview context…", pct: 50 });
+    onProgress({ step: "done", message: "Context ready. Proceeding to discovery interview…", pct: 100 });
+    return { evidenceCount: 0, warnings: [], pageHtml: "" };
+  }
+
   let browser: Browser | null = null;
 
   onProgress({ step: "start", message: "Starting research…", pct: 5 });
@@ -75,7 +83,7 @@ export async function runScraper(input: ScraperInput, onProgress: ProgressCb): P
   let navCount = 0;
   for (const path of NAV_PATHS) {
     if (navCount >= 4) break; // bound work
-    const url = joinPath(input.website, path);
+    const url = joinPath(website, path);
     onProgress({
       step: "web",
       message: `Reading ${labelFor(path) || "home"}…`,
@@ -101,7 +109,7 @@ export async function runScraper(input: ScraperInput, onProgress: ProgressCb): P
 
   // 3) job-listings-fetch — look for a careers page and infer roles.
   onProgress({ step: "jobs", message: "Reviewing job listings…", pct: 70 });
-  const careersUrl = joinPath(input.website, "careers");
+  const careersUrl = joinPath(website, "careers");
   if (fetched.has(careersUrl)) {
     inferRoles(input.scanId, careersUrl, fetched.get(careersUrl) ?? "");
   }
@@ -109,7 +117,7 @@ export async function runScraper(input: ScraperInput, onProgress: ProgressCb): P
   // 4) review-search-fetch — lightweight public-review signal via search.
   onProgress({ step: "reviews", message: "Reviewing public signals…", pct: 88 });
   try {
-    await fetchReviewSignal(input.scanId, input.website);
+    await fetchReviewSignal(input.scanId, website);
   } catch (e) {
     warnings.push(`Reviews skipped: ${(e as Error).message}`);
   }

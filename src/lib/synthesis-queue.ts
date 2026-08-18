@@ -11,8 +11,18 @@ export interface SynthResult {
   clientReport: ClientReport;
 }
 
-const SYNTH = new Map<string, Promise<SynthResult>>();
-const REPORTS = new Map<string, ClientReport>();
+interface GlobalSynthStore {
+  __COMPANY_AI_SYNTH__?: Map<string, Promise<SynthResult>>;
+  __COMPANY_AI_REPORTS__?: Map<string, ClientReport>;
+}
+
+const globalSynthStore = globalThis as unknown as GlobalSynthStore;
+const SYNTH: Map<string, Promise<SynthResult>> =
+  globalSynthStore.__COMPANY_AI_SYNTH__ ??
+  (globalSynthStore.__COMPANY_AI_SYNTH__ = new Map<string, Promise<SynthResult>>());
+const REPORTS: Map<string, ClientReport> =
+  globalSynthStore.__COMPANY_AI_REPORTS__ ??
+  (globalSynthStore.__COMPANY_AI_REPORTS__ = new Map<string, ClientReport>());
 
 export function startSynthesis(id: string, p: Promise<SynthResult>): void {
   if (SYNTH.has(id)) return;

@@ -28,7 +28,8 @@ export interface Evidence {
 export interface ScanRecord {
   readonly id: string;
   company: string;
-  website: string;
+  website?: string;
+  location?: string;
   email: string;
   /** Sanitized optional operational notes (spec §6.4 — prospect free text). */
   notes: string;
@@ -40,12 +41,19 @@ export interface ScanRecord {
   answersExpireAt: number; // prospect-answers expiry (longer)
 }
 
-const SCANS = new Map<string, ScanRecord>();
+interface GlobalScanStore {
+  __COMPANY_AI_SCANS__?: Map<string, ScanRecord>;
+}
+
+const globalStore = globalThis as unknown as GlobalScanStore;
+const SCANS: Map<string, ScanRecord> =
+  globalStore.__COMPANY_AI_SCANS__ ?? (globalStore.__COMPANY_AI_SCANS__ = new Map<string, ScanRecord>());
 
 export function createScan(params: {
   id: string;
   company: string;
-  website: string;
+  website?: string;
+  location?: string;
   email: string;
   notes?: string;
   retentionScrapedDays: number;
@@ -55,7 +63,8 @@ export function createScan(params: {
   const rec: ScanRecord = {
     id: params.id,
     company: params.company,
-    website: params.website,
+    website: params.website ?? "",
+    location: params.location ?? "",
     email: params.email,
     notes: params.notes ?? "",
     evidence: new Map(),

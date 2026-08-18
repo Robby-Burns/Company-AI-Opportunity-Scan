@@ -113,7 +113,7 @@ export function ClientSummaryPdf({ report, logoSrc }: { report: ClientReport; lo
 
         <Text style={styles.h1}>{s(report.headline)}</Text>
         <Text style={styles.meta}>
-          Prepared for {s(report.company)} · {s(report.website)} · {date}
+          Prepared for {[report.company, report.location, report.website].filter(Boolean).map((v) => s(v!)).join(" · ")} · {date}
         </Text>
 
         {/* Company snapshot */}

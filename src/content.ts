@@ -44,7 +44,8 @@ export const content = {
       name: "Name",
       email: "Work Email",
       company: "Company",
-      website: "Company Website"
+      location: "Location / City & State (optional)",
+      website: "Company Website (optional)"
     },
     cta: "Start My Free Review",
     support: "Free. No obligation. No AI sales pitch.",

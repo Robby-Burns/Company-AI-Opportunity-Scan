@@ -94,7 +94,8 @@ function renderBriefText(b: SalesBrief): string {
     `Fox & Loom — Sales Intelligence Brief (Company AI Opportunity Scan)`,
     ``,
     `Company: ${b.company}`,
-    `Website: ${b.website}`,
+    ...(b.location ? [`Location: ${b.location}`] : []),
+    `Website: ${b.website || "(none provided)"}`,
     `Contact: ${b.contactEmail}`,
     `Generated: ${new Date(b.generatedAt).toISOString()}`,
     ``,
@@ -189,10 +190,16 @@ function renderBriefHtml(b: SalesBrief): string {
     ? b.contradictions.map((c) => `<li>${esc(c)}</li>`).join("")
     : `<li>(none)</li>`;
 
+  const companyLine = [
+    `<strong>${esc(b.company)}</strong>`,
+    b.location ? esc(b.location) : "",
+    b.website ? esc(b.website) : "(no website)"
+  ].filter(Boolean).join(` ${ENT.middot} `);
+
   return [
     `<!doctype html><html><body style="font-family:system-ui,sans-serif;line-height:1.5">`,
     `<h2>Fox ${ENT.amp} Loom — Sales Intelligence Brief</h2>`,
-    `<p>Company: <strong>${esc(b.company)}</strong> ${ENT.middot} ${esc(b.website)}<br/>Contact: ${esc(b.contactEmail)} ${ENT.middot} ${new Date(b.generatedAt).toISOString()}</p>`,
+    `<p>Company: ${companyLine}<br/>Contact: ${esc(b.contactEmail)} ${ENT.middot} ${new Date(b.generatedAt).toISOString()}</p>`,
     `<h3>Summary</h3><p>${esc(b.summary)}</p>`,
     `<h3>Company snapshot</h3><p>${esc(b.companySnapshot || "(none)")}</p>`,
     `<h3>1. Opportunity Hypothesis</h3>${hypHtml}`,

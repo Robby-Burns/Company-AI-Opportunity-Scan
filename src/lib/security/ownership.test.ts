@@ -47,4 +47,24 @@ describe("Ownership signal (spec §6.2)", () => {
     const r = checkOwnership({ email: "", website: "", confirmed: false });
     expect(r.ok).toBe(false);
   });
+
+  it("passes when no website is provided but confirmation is checked", () => {
+    const r = checkOwnership({
+      email: "bob@localstore.com",
+      website: "",
+      confirmed: true
+    });
+    expect(r.ok).toBe(true);
+    expect(r.reason).toBe("confirmed");
+  });
+
+  it("fails when no website is provided and confirmation is unchecked", () => {
+    const r = checkOwnership({
+      email: "bob@localstore.com",
+      website: "",
+      confirmed: false
+    });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe("mismatch");
+  });
 });

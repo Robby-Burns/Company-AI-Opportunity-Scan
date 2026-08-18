@@ -22,6 +22,7 @@ export const dynamic = "force-dynamic";
 interface ScanRequestBody {
   company?: string;
   website?: string;
+  location?: string;
   email?: string;
   notes?: string;
   confirmed?: boolean;
@@ -57,13 +58,14 @@ export async function POST(req: Request) {
 
   const company = (body.company ?? "").trim();
   const website = (body.website ?? "").trim();
+  const location = (body.location ?? "").trim();
   const email = (body.email ?? "").trim();
   const confirmed = Boolean(body.confirmed);
 
-  if (!company || !website || !email) {
-    return NextResponse.json({ error: "Company name, website, and email are required." }, { status: 400 });
+  if (!company || !email) {
+    return NextResponse.json({ error: "Company name and contact email are required." }, { status: 400 });
   }
-  if (!isValidHttpUrl(website)) {
+  if (website && !isValidHttpUrl(website)) {
     return NextResponse.json({ error: "Website must be a valid http(s) URL." }, { status: 400 });
   }
   // Basic email shape check (ownership check does the domain logic).
@@ -80,7 +82,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          "We couldn't confirm you represent this company. Use a work email matching the website, or confirm you represent them."
+          "We couldn't confirm you represent this company. Please check the confirmation box to confirm you represent them."
       },
       { status: 403 }
     );
@@ -108,11 +110,23 @@ export async function POST(req: Request) {
     id: scanId,
     company,
     website,
+    location,
     email,
     notes,
     retentionScrapedDays: env.retentionScrapedDays,
     retentionAnswersDays: env.retentionProspectAnswersDays
   });
+
+  // Prospect-reported location becomes evidence for context
+  if (location) {
+    addEvidence(scanId, {
+      kind: "PROSPECT_REPORTED",
+      source: "intake-location",
+      snippet: `Company Location / Geography: ${location}`,
+      signal: "location:operating_area",
+      confidence: "high"
+    });
+  }
 
   // Prospect-reported notes become PROSPECT_REPORTED evidence with an
   // evidence_id so synthesis can cite them (spec §6.4 + §7.1 traceability).

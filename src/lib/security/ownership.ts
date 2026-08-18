@@ -14,7 +14,7 @@ import { getDomain } from "tldts";
 
 export interface OwnershipInput {
   email: string;
-  website: string;
+  website?: string;
   /** Submitter checked "I represent this company". */
   confirmed: boolean;
 }
@@ -33,11 +33,12 @@ function registrable(value: string): string | null {
 }
 
 export function checkOwnership(input: OwnershipInput): OwnershipResult {
-  const email = input.email.trim().toLowerCase();
-  const website = input.website.trim().toLowerCase();
+  const email = (input.email ?? "").trim().toLowerCase();
+  const website = (input.website ?? "").trim().toLowerCase();
 
   const emailDomain = email.includes("@") ? registrable(email.split("@")[1] ?? "") : null;
   const websiteHost = (() => {
+    if (!website) return "";
     try {
       return new URL(website).hostname;
     } catch {
