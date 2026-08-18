@@ -84,17 +84,18 @@ describe("Retention sweep — per-class (spec §6.5)", () => {
         company: "Acme",
         website: "https://acme.com",
         headline: "h",
-        companySnapshot: "",
-        hypothesis: null,
-        whyIdentified: [],
-        potentialImpact: [],
-        additionalSignals: [],
-        whatRemainsUnknown: [],
-        deepAssessmentQuestions: [],
-        whatsNext: "",
+        generatedAt: now,
         evidenceIds: [],
-        generatedAt: now
-      } as any
+        yourBusiness: "Acme",
+        whatWeHeard: [],
+        aiJourney: { stage: "Getting Started", explanation: "" },
+        aiCulture: { whatMayHelp: [], whatMayMakeAdoptionHarder: [], whereAiMayHelp: "" },
+        dataAndTechnology: { dataIdentified: [], systems: [], crossSystemFlow: [], whyThisMatters: "" },
+        whereAiCouldHelp: { workflowFriction: [], leveragePatterns: [], fitBreakdown: { wellSuited: [], traditionalAutomationSuited: [], humanJudgmentRequired: [] } },
+        opportunities: [],
+        whatWeStillNeedToLearn: [],
+        ourTakeaway: { whatWeUnderstand: "", whatAppearsWorthExploring: "", whatMayNeedImprovementFirst: "", whatWeDontKnowYet: "", recommendedNextStep: "" }
+      }
     }));
 
     return Promise.resolve().then(async () => {

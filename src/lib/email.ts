@@ -119,55 +119,56 @@ function renderBriefText(b: SalesBrief): string {
     `   - What may make adoption harder: ${cr.aiCulture.whatMayMakeAdoptionHarder.join(", ") || "(none)"}`,
     `   - Where AI may help: ${cr.aiCulture.whereAiMayHelp}`,
     ``,
-    `5. Data Landscape:`,
-    ...(cr.yourData.dataIdentified.length
-      ? cr.yourData.dataIdentified.map((d) => `   - ${d.data} (lives in: ${d.location})${d.relevance ? ` — ${d.relevance}` : ""}`)
-      : ["   - (none identified)"]),
-    `   Context: ${cr.yourData.whyThisMatters}`,
-    ``,
-    `6. AI Opportunity Map:`,
-    ...(cr.opportunityMap.length
-      ? cr.opportunityMap.map((o) => `   - ${o.stage}: ${o.friction}`)
-      : ["   - (no stages mapped)"]),
-    ``,
-    `7. Where AI May Help:`,
-    ...(cr.aiLeverage.length
-      ? cr.aiLeverage.map((l) => `   - [${l.category}] ${l.observation} [Evidence: ${l.evidenceIds.join(", ")}]`)
-      : ["   - (none identified)"]),
-    ``,
-    `8. AI vs. Automation vs. Human Judgment Fit:`,
-    `   - AI Suited: ${cr.aiFit.wellSuited.join("; ") || "(none)"}`,
-    `   - Traditional Automation Suited: ${cr.aiFit.traditionalAutomationSuited.join("; ") || "(none)"}`,
-    `   - Human Judgment Required: ${cr.aiFit.humanJudgmentRequired.join("; ") || "(none)"}`,
-    ``,
-    `9. Technology Environment:`,
-    `   - Systems: ${cr.technologyEnvironment.systems.join(", ") || "(none)"}`,
-    ...(cr.technologyEnvironment.crossSystemFlow.length
-      ? cr.technologyEnvironment.crossSystemFlow.map((f) => `   - Flow: ${f}`)
+    `5. Data & Technology Environment:`,
+    ...(cr.dataAndTechnology.dataIdentified.length
+      ? cr.dataAndTechnology.dataIdentified.map((d) => `   - Data: ${d.data} (lives in: ${d.location})${d.relevance ? ` — ${d.relevance}` : ""}`)
+      : ["   - Data: (none identified)"]),
+    `   - Systems: ${cr.dataAndTechnology.systems.join(", ") || "(none identified)"}`,
+    ...(cr.dataAndTechnology.crossSystemFlow.length
+      ? cr.dataAndTechnology.crossSystemFlow.map((f) => `   - Cross-System Flow: ${f}`)
       : []),
+    `   - Context: ${cr.dataAndTechnology.whyThisMatters}`,
     ``,
-    `10. Areas Worth Investigating (0-3):`,
+    `6. Where AI Could Help:`,
+    `   A. Workflow Friction:`,
+    ...(cr.whereAiCouldHelp.workflowFriction.length
+      ? cr.whereAiCouldHelp.workflowFriction.map((o) => `      - ${o.stage}: ${o.friction}`)
+      : ["      - (no friction points mapped)"]),
+    `   B. Technology / Leverage Patterns:`,
+    ...(cr.whereAiCouldHelp.leveragePatterns.length
+      ? cr.whereAiCouldHelp.leveragePatterns.map((l) => `      - [${l.category}] ${l.observation} [Evidence: ${l.evidenceIds.join(", ")}]`)
+      : ["      - (none identified)"]),
+    `   C. AI vs. Automation vs. Human Judgment Fit:`,
+    `      - AI Suited: ${cr.whereAiCouldHelp.fitBreakdown.wellSuited.join("; ") || "(none)"}`,
+    `      - Traditional Automation Suited: ${cr.whereAiCouldHelp.fitBreakdown.traditionalAutomationSuited.join("; ") || "(none)"}`,
+    `      - Human Judgment Required: ${cr.whereAiCouldHelp.fitBreakdown.humanJudgmentRequired.join("; ") || "(none)"}`,
+    ``,
+    `7. Areas Worth Investigating (0-3 max):`,
     ...(cr.opportunities.length
       ? cr.opportunities.map((o, idx) =>
           [
-            `   Opportunity ${idx + 1}: ${o.title} (${o.status} | Support: ${o.evidenceStrength} | Fit: ${o.interventionFit})`,
-            `   - Observation: ${o.observation}`,
-            `   - Why It Matters: ${o.whyItMatters}`,
-            `   - AI/Automation Role: ${o.whereAiFits}`,
-            `   - What We Still Need To Learn: ${o.whatWeStillNeedToLearn.join("; ") || "(none)"}`,
+            `   Opportunity ${idx + 1}: ${o.title} (${o.status} | Confidence: ${o.evidenceConfidence} | Approach: ${o.potentialApproach})`,
+            `   - Why It Stood Out: ${o.whyItStoodOut}`,
+            `   - Potential Value: ${o.potentialValue}`,
+            `   - Confidence Rationale: ${o.confidenceReason}`,
+            ...(o.thingsToWatch?.length ? [`   - Things to Watch: ${o.thingsToWatch.join("; ")}`] : []),
+            ...(o.whatWeStillNeedToLearn?.length ? [`   - What to Investigate Next: ${o.whatWeStillNeedToLearn.join("; ")}`] : []),
             `   - Evidence: ${o.evidenceIds.join(", ") || "(none)"}`
           ].join("\n")
         )
       : ["   (No clear operational opportunity hypothesis identified with available evidence)"]),
     ``,
-    `11. What We Still Need to Learn (Diagnostic Questions):`,
+    `8. What We Still Need to Learn (Diagnostic Questions):`,
     ...(cr.whatWeStillNeedToLearn.length
-      ? cr.whatWeStillNeedToLearn.map((q) => `   - ${q.question} [Why: ${q.whyWeNeedToKnow}]`)
+      ? cr.whatWeStillNeedToLearn.map((q) => `   - ${q.question} [Why: ${q.whyItMatters}]${q.evidenceNeeded ? ` (Needed: ${q.evidenceNeeded})` : ""}`)
       : ["   - (none)"]),
     ``,
-    `12. Analyst View:`,
-    `   ${cr.analystView.summary}`,
-    `   ${cr.analystView.deepAssessmentRecommendation}`,
+    `9. Our Takeaway:`,
+    `   - What We Understand: ${cr.ourTakeaway.whatWeUnderstand}`,
+    `   - Worth Exploring: ${cr.ourTakeaway.whatAppearsWorthExploring}`,
+    `   - Improvement First: ${cr.ourTakeaway.whatMayNeedImprovementFirst}`,
+    `   - Unknowns: ${cr.ourTakeaway.whatWeDontKnowYet}`,
+    `   - Recommended Next Step: ${cr.ourTakeaway.recommendedNextStep}`,
     ``,
     `Contradictions (public vs stakeholder):`,
     ...(b.contradictions.length ? b.contradictions.map((c) => `- ${c}`) : ["- (none)"]),
@@ -191,10 +192,10 @@ function renderBriefHtml(b: SalesBrief): string {
           (o, idx) =>
             `<div style="background:#FAF7F0;border:1px solid #E4E1DA;border-radius:6px;padding:10px;margin-bottom:8px;">` +
             `<strong>Opportunity ${idx + 1}: ${esc(o.title)}</strong><br/>` +
-            `<small>Status: ${esc(o.status)} | Support: ${esc(o.evidenceStrength)} | Fit: ${esc(o.interventionFit)}</small><br/>` +
-            `<p style="margin:4px 0;"><strong>Observation:</strong> ${esc(o.observation)}</p>` +
-            `<p style="margin:4px 0;"><strong>Why It Matters:</strong> ${esc(o.whyItMatters)}</p>` +
-            `<p style="margin:4px 0;"><strong>AI Fit:</strong> ${esc(o.whereAiFits)}</p>` +
+            `<small>Status: ${esc(o.status)} | Confidence: ${esc(o.evidenceConfidence)} | Approach: ${esc(o.potentialApproach)}</small><br/>` +
+            `<p style="margin:4px 0;"><strong>Why It Stood Out:</strong> ${esc(o.whyItStoodOut)}</p>` +
+            `<p style="margin:4px 0;"><strong>Potential Value:</strong> ${esc(o.potentialValue)}</p>` +
+            `<p style="margin:4px 0;"><strong>Confidence Reason:</strong> ${esc(o.confidenceReason)}</p>` +
             `<small>Evidence: ${esc(o.evidenceIds.join(", ") || "(none)")}</small>` +
             `</div>`
         )
@@ -206,7 +207,7 @@ function renderBriefHtml(b: SalesBrief): string {
     : `<li>(none)</li>`;
 
   const questionsHtml = cr.whatWeStillNeedToLearn.length
-    ? cr.whatWeStillNeedToLearn.map((q) => `<li><strong>${esc(q.question)}</strong> — <em>${esc(q.whyWeNeedToKnow)}</em></li>`).join("")
+    ? cr.whatWeStillNeedToLearn.map((q) => `<li><strong>${esc(q.question)}</strong> — <em>${esc(q.whyItMatters)}</em>${q.evidenceNeeded ? ` <small>(Needed: ${esc(q.evidenceNeeded)})</small>` : ""}</li>`).join("")
     : `<li>(none)</li>`;
 
   const contraHtml = b.contradictions.length
@@ -227,9 +228,13 @@ function renderBriefHtml(b: SalesBrief): string {
     `<h3>1. Your Business</h3><p>${esc(cr.yourBusiness)}</p>`,
     `<h3>2. What We Heard</h3><ul>${whyHtml}</ul>`,
     `<h3>3. AI Journey Stage</h3><p><strong>${esc(cr.aiJourney.stage)}:</strong> ${esc(cr.aiJourney.explanation)}</p>`,
-    `<h3>10. Areas Worth Investigating</h3>${oppsHtml}`,
-    `<h3>11. What We Still Need to Learn</h3><ul>${questionsHtml}</ul>`,
-    `<h3>12. Analyst View</h3><p>${esc(cr.analystView.summary)}</p><p>${esc(cr.analystView.deepAssessmentRecommendation)}</p>`,
+    `<h3>5. Data & Technology</h3><p><strong>Systems:</strong> ${esc(cr.dataAndTechnology.systems.join(", ") || "(none)")}</p><p>${esc(cr.dataAndTechnology.whyThisMatters)}</p>`,
+    `<h3>7. Areas Worth Investigating</h3>${oppsHtml}`,
+    `<h3>8. What We Still Need to Learn</h3><ul>${questionsHtml}</ul>`,
+    `<h3>9. Our Takeaway</h3>`,
+    `<p><strong>What We Understand:</strong> ${esc(cr.ourTakeaway.whatWeUnderstand)}</p>`,
+    `<p><strong>Worth Exploring:</strong> ${esc(cr.ourTakeaway.whatAppearsWorthExploring)}</p>`,
+    `<p><strong>Recommended Next Step:</strong> ${esc(cr.ourTakeaway.recommendedNextStep)}</p>`,
     `<h3>Contradictions (public vs stakeholder)</h3><ul>${contraHtml}</ul>`,
     `<p><em>Evidence ids used:</em> ${esc(b.evidenceIds.join(", ") || "(none)")}</p>`,
     `</body></html>`
