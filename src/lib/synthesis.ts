@@ -21,6 +21,9 @@ import { getInterviewState } from "@/lib/orchestrator";
 import { evaluateAndRecordSession } from "@/lib/learning/evaluator";
 import type { DimensionCoverage, LensId } from "@/lib/interview/types";
 import { LENS_IDS } from "@/lib/interview/personas";
+import { buildEvidenceLedger, evaluateCandidatePatterns, filterSupportedHypotheses } from "@/lib/patterns/matcher";
+import { evaluateScanReport } from "@/lib/evaluation/evaluator";
+import type { ScanEvaluationResult } from "@/lib/evaluation/types";
 
 export type InterventionFit =
   | "ai"
@@ -158,6 +161,9 @@ export interface ClientReport {
 
   // 9. Our Takeaway
   ourTakeaway: OurTakeaway;
+
+  // Independent Two-Pass Evaluation Telemetry
+  evaluation?: ScanEvaluationResult;
 }
 
 export interface SalesBrief {
@@ -209,6 +215,8 @@ const SYNTH_SYSTEM = [
   "5. STRICT PROVENANCE: Every observation, workflow friction point, leverage pattern, and candidate opportunity must cite valid, non-empty subsets of real evidence_ids from the evidence list.",
   "6. 0 TO 3 OPPORTUNITIES: Rank up to 3 candidate opportunities grounded in evidence. Zero opportunities is completely acceptable if evidence is insufficient.",
   "7. CONDITIONAL NEXT STEP: In 'ourTakeaway.recommendedNextStep', give an honest, grounded next step (e.g. fix a process, improve data, explore automation, conduct a deeper assessment if uncertainty warrants it, or do nothing yet). Do NOT automatically pitch a paid engagement.",
+  "8. CANDIDATE DIAGNOSTIC HYPOTHESES: Any candidate pattern cues in the prompt are diagnostic reasoning lenses only, never confirmed facts. Ground all findings in primary company evidence. If 0 opportunities qualify, return 'opportunities: []'.",
+  "9. INTERVENTION TRIANGULATION: Clearly distinguish AI opportunities from deterministic software/APIs and process redesign. Never force generative AI onto deterministic problems.",
   "",
   "=== 9-SECTION STRUCTURE ===",
   "Section 1: Your Business — Plain-language company description, operating model, and context.",
@@ -309,6 +317,10 @@ export async function synthesizeReports(scanId: string): Promise<{ client: Clien
 
   const evidence = listEvidence(scanId);
   const validIds = new Set(evidence.map((e) => e.id));
+  const ledger = buildEvidenceLedger(evidence);
+  const patternCandidates = evaluateCandidatePatterns(ledger, scan.notes);
+  const supportedHypotheses = filterSupportedHypotheses(patternCandidates, 3);
+
   const evidenceJson = evidence.map((e) => ({
     id: e.id,
     kind: e.kind,
@@ -321,13 +333,21 @@ export async function synthesizeReports(scanId: string): Promise<{ client: Clien
   const interview = getInterviewState(scanId);
   const coverageBlock = serializeCoverage(interview?.coverage);
 
+  const candidateHypothesesBlock = supportedHypotheses.length > 0
+    ? `\nCANDIDATE DIAGNOSTIC HYPOTHESES (Diagnostic reasoning cues tested against evidence — not confirmed findings):\n` +
+      supportedHypotheses.map((h, i) =>
+        `${i + 1}. [${h.patternName}] Match Reason: ${h.matchRationale} | Triangulated Fit: ${h.interventionType} (${h.interventionRationale}) | Confidence: ${h.confidence} | Key Gaps to Verify: ${h.remainingUncertainties.slice(0, 2).join("; ")}`
+      ).join("\n") + "\n"
+    : "\nCANDIDATE DIAGNOSTIC HYPOTHESES: No diagnostic patterns had matching signals. Evaluate primary evidence directly and return an empty opportunities array if insufficient evidence exists.\n";
+
   const userMsg =
     `Company: ${scan.company}\n` +
     (scan.location ? `Location: ${scan.location}\n` : "") +
     (scan.website ? `Website: ${scan.website}\n\n` : `Website: (None provided)\n\n`) +
     (scan.notes ? `Operational Notes from submitter:\n${scan.notes}\n\n` : "") +
     `Evidence (ids are real and must be cited in evidenceIds):\n${JSON.stringify(evidenceJson)}\n\n` +
-    `INTERVIEW CONTEXT & COMPANY COVERAGE MAP:\n${coverageBlock}\n\n` +
+    `INTERVIEW CONTEXT & COMPANY COVERAGE MAP:\n${coverageBlock}\n` +
+    candidateHypothesesBlock + "\n" +
     `Synthesize the 9-section preliminary AI Opportunity Scan report. Follow the strict JSON schema and anti-ROI rules.`;
 
   let parsed: RawSynthesis;
@@ -391,6 +411,10 @@ export async function synthesizeReports(scanId: string): Promise<{ client: Clien
     whatWeStillNeedToLearn,
     ourTakeaway
   };
+
+  // Run Independent Two-Pass Evaluation (Dataset B Explicit Rubric)
+  const evaluation = evaluateScanReport(client, validIds);
+  client.evaluation = evaluation;
 
   const sales: SalesBrief = {
     to: "",
