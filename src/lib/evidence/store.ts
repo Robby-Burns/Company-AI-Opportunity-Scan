@@ -12,7 +12,19 @@ export type EvidenceKind =
   | "SCRAPED_TECH"
   | "SCRAPED_JOBS"
   | "SCRAPED_REVIEWS"
-  | "PROSPECT_REPORTED"; // from interview answers
+  | "PROSPECT_REPORTED" // from interview answers
+  | "SEARCH_SNIPPET_VERIFIED"; // instantly verified candidate metadata from autonomous search
+
+export interface DisambiguationCandidate {
+  id: string;
+  title: string;
+  url: string;
+  snippet: string;
+  domain: string;
+  locationSnippet?: string;
+  score: number;
+  isAggregator: boolean;
+}
 
 export interface Evidence {
   readonly id: string; // evidence_id
@@ -35,6 +47,8 @@ export interface ScanRecord {
   notes: string;
   evidence: Map<string, Evidence>;
   answers: Map<string, string>; // questionId -> answer
+  disambiguationCandidates?: DisambiguationCandidate[];
+  disambiguationResolved?: boolean;
   status: "scraping" | "interviewing" | "synthesizing" | "complete" | "failed";
   createdAt: number;
   expiresAt: number; // scraped-data expiry
@@ -101,6 +115,31 @@ export function recordAnswer(scanId: string, questionId: string, answer: string)
 export function setStatus(scanId: string, status: ScanRecord["status"]): void {
   const rec = SCANS.get(scanId);
   if (rec) rec.status = status;
+}
+
+export function setDisambiguationCandidates(scanId: string, candidates: DisambiguationCandidate[]): void {
+  const rec = SCANS.get(scanId);
+  if (rec) {
+    rec.disambiguationCandidates = candidates;
+    rec.disambiguationResolved = false;
+  }
+}
+
+export function getDisambiguationCandidates(scanId: string): DisambiguationCandidate[] | undefined {
+  return SCANS.get(scanId)?.disambiguationCandidates;
+}
+
+export function clearDisambiguationCandidates(scanId: string): void {
+  const rec = SCANS.get(scanId);
+  if (rec) {
+    rec.disambiguationCandidates = undefined;
+    rec.disambiguationResolved = true;
+  }
+}
+
+export function updateScanWebsite(scanId: string, website: string): void {
+  const rec = SCANS.get(scanId);
+  if (rec) rec.website = website;
 }
 
 export function listEvidence(scanId: string): Evidence[] {

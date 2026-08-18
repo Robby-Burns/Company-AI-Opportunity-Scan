@@ -17,7 +17,17 @@
  */
 import { complete } from "@/lib/llm";
 import { sanitize } from "@/lib/security/sanitize";
-import { getScan, listEvidence, recordAnswer, setStatus, addEvidence } from "@/lib/evidence/store";
+import {
+  getScan,
+  listEvidence,
+  recordAnswer,
+  setStatus,
+  addEvidence,
+  clearDisambiguationCandidates,
+  updateScanWebsite,
+  type DisambiguationCandidate
+} from "@/lib/evidence/store";
+import { scrapeWebsiteInBackground } from "@/lib/scraper";
 import { content } from "@/content";
 import {
   coordinatorPlan,
@@ -147,6 +157,48 @@ export async function nextQuestion(scanId: string): Promise<InterviewQuestion | 
   }
   const scan = getScan(scanId);
   if (!scan) return null;
+
+  // Conversational Disambiguation Gate (§2): If search yielded ambiguous candidates, resolve on turn 1.
+  if (st.asked === 0 && scan.disambiguationCandidates && scan.disambiguationCandidates.length > 0 && !scan.disambiguationResolved) {
+    const candidates = scan.disambiguationCandidates;
+    let disambigQ: InterviewQuestion;
+
+    if (candidates.length === 1) {
+      const c = candidates[0]!;
+      const locText = c.locationSnippet || scan.location || "your area";
+      const snippetHint = c.snippet ? ` (${c.snippet.slice(0, 80)}…)` : "";
+      disambigQ = {
+        id: "q1_disambig",
+        text: `I found a few details online to help us get started. Just to confirm, are you ${c.title} in ${locText}${snippetHint}?`,
+        kind: "choice",
+        choices: [
+          `Yes, that's us (${c.domain})`,
+          "No, that's a different company",
+          "We don't have an active website / Skip"
+        ],
+        lens: "business",
+        depth: 1
+      };
+    } else {
+      const choices = candidates.slice(0, 3).map((c) => {
+        const area = c.locationSnippet ? ` – ${c.locationSnippet}` : "";
+        const desc = c.snippet ? ` (${c.snippet.slice(0, 60)}…)` : ` (${c.domain})`;
+        return `${c.title}${area}${desc}`;
+      });
+      choices.push("None of these / Proceed without online profile");
+      disambigQ = {
+        id: "q1_disambig",
+        text: `We found a few possible matches online for ${scan.company} in ${scan.location || "your area"}. Which one is your business?`,
+        kind: "choice",
+        choices,
+        lens: "business",
+        depth: 1
+      };
+    }
+
+    st.current = disambigQ;
+    return disambigQ;
+  }
 
   const evidence = listEvidence(scanId);
   const evidenceSummary = summarizeEvidence(evidence);
@@ -406,6 +458,65 @@ export async function ingestResponse(scanId: string, questionId: string, answer:
   if (!st) return false;
   const scan = getScan(scanId);
   if (!scan) return false;
+
+  // Handle Q1 Disambiguation response
+  if (questionId === "q1_disambig" || questionId.startsWith("q1_disambig")) {
+    const disambig = scan.disambiguationCandidates ?? [];
+    const ansLower = answer.trim().toLowerCase();
+
+    const isRejection =
+      ansLower.includes("none of these") ||
+      ansLower.includes("no, that's a different") ||
+      ansLower.includes("skip") ||
+      ansLower.includes("proceed without") ||
+      ansLower.startsWith("no");
+
+    if (isRejection) {
+      // Zero Hallucination: strictly clear unverified candidate data
+      clearDisambiguationCandidates(scanId);
+    } else {
+      // Find selected candidate
+      let selected: DisambiguationCandidate | undefined;
+      if (disambig.length === 1 && (ansLower.startsWith("yes") || ansLower.includes("that's us"))) {
+        selected = disambig[0];
+      } else {
+        selected = disambig.find(
+          (c) =>
+            answer.includes(c.title) ||
+            answer.includes(c.domain) ||
+            (c.snippet && answer.includes(c.snippet.slice(0, 30)))
+        );
+        if (!selected && disambig.length > 0) {
+          selected = disambig[0]; // fallback to first candidate if prospect confirmed
+        }
+      }
+
+      if (selected) {
+        // 1. Immediately seed instant verified search snippet for Question 2 context (zero latency)
+        addEvidence(scanId, {
+          kind: "SEARCH_SNIPPET_VERIFIED",
+          source: selected.url,
+          snippet: `${selected.title}: ${selected.snippet}`,
+          signal: `discovery:verified:${selected.domain}`,
+          confidence: "high"
+        });
+        updateScanWebsite(scanId, selected.url);
+
+        // 2. Trigger asynchronous background Playwright crawl if not an aggregator
+        if (!selected.isAggregator) {
+          scrapeWebsiteInBackground(scanId, selected.url);
+        }
+      }
+      clearDisambiguationCandidates(scanId);
+    }
+
+    recordAnswer(scanId, questionId, answer);
+    st.asked += 1;
+    st.current = undefined;
+    if (st.asked >= st.maxQuestions) st.finished = true;
+    return true;
+  }
+
   recordAnswer(scanId, questionId, answer);
   st.asked += 1;
   st.current = undefined;

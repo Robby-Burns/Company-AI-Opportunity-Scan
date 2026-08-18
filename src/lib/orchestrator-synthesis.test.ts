@@ -188,9 +188,9 @@ describe("Redesigned 12-Section Synthesis & Reasoning Pipeline", () => {
         headline: "Mustang Sign Company: Preliminary AI Opportunity Scan",
         yourBusiness: "Mustang Sign Company is a custom design, fabrication, and installation business in Kennewick, WA serving regional commercial clients with monument signs, pylons, and vehicle graphics.",
         whatWeHeard: [
-          { observation: "Sales estimators spend considerable manual time researching municipal zoning codes for Kennewick and Pasco.", evidenceIds: [ev3.id] },
-          { observation: "Quote building involves looking up past won project parts in shopVOX and spreadsheets.", evidenceIds: [ev4.id] },
-          { observation: "Follow-up on delivered estimates is inconsistent due to sales rep bandwidth constraints.", evidenceIds: [ev5.id] }
+          { observation: "Sales estimators spend considerable manual time researching municipal zoning codes for Kennewick and Pasco.", evidenceIds: [ev3!.id] },
+          { observation: "Quote building involves looking up past won project parts in shopVOX and spreadsheets.", evidenceIds: [ev4!.id] },
+          { observation: "Follow-up on delivered estimates is inconsistent due to sales rep bandwidth constraints.", evidenceIds: [ev5!.id] }
         ],
         aiJourney: {
           stage: "Exploring",
@@ -209,15 +209,15 @@ describe("Redesigned 12-Section Synthesis & Reasoning Pipeline", () => {
           whyThisMatters: "Your operational data is split between structured tools like shopVOX and unstructured municipal PDF regulations."
         },
         opportunityMap: [
-          { stage: "Inquiry & Address Verification", friction: "Manual confirmation of municipal jurisdiction", evidenceIds: [ev3.id] },
-          { stage: "Zoning & Compliance Lookup", friction: "Manual cross-referencing of height and setback rules", evidenceIds: [ev3.id] },
-          { stage: "Estimate Drafting", friction: "Manual lookup of past project recipes and parts in shopVOX", evidenceIds: [ev4.id] },
-          { stage: "Estimate Follow-up", friction: "Follow-ups dropped due to rep workload", evidenceIds: [ev5.id] }
+          { stage: "Inquiry & Address Verification", friction: "Manual confirmation of municipal jurisdiction", evidenceIds: [ev3!.id] },
+          { stage: "Zoning & Compliance Lookup", friction: "Manual cross-referencing of height and setback rules", evidenceIds: [ev3!.id] },
+          { stage: "Estimate Drafting", friction: "Manual lookup of past project recipes and parts in shopVOX", evidenceIds: [ev4!.id] },
+          { stage: "Estimate Follow-up", friction: "Follow-ups dropped due to rep workload", evidenceIds: [ev5!.id] }
         ],
         aiLeverage: [
-          { category: "Information retrieval", observation: "Searching municipal code regulations for height/setback limits.", evidenceIds: [ev3.id] },
-          { category: "Boring administrative work", observation: "Pulling historical part lists from past jobs to draft new quotes.", evidenceIds: [ev4.id] },
-          { category: "Communication gaps", observation: "Nudging clients on unapproved quotes after 3 business days.", evidenceIds: [ev5.id] }
+          { category: "Information retrieval", observation: "Searching municipal code regulations for height/setback limits.", evidenceIds: [ev3!.id] },
+          { category: "Boring administrative work", observation: "Pulling historical part lists from past jobs to draft new quotes.", evidenceIds: [ev4!.id] },
+          { category: "Communication gaps", observation: "Nudging clients on unapproved quotes after 3 business days.", evidenceIds: [ev5!.id] }
         ],
         aiFit: {
           wellSuited: ["Municipal zoning code retrieval and summarization", "Drafting estimate follow-up messages"],
@@ -237,7 +237,7 @@ describe("Redesigned 12-Section Synthesis & Reasoning Pipeline", () => {
             interventionFit: "ai",
             evidenceStrength: "Strong",
             status: "Potential opportunity",
-            evidenceIds: [ev3.id],
+            evidenceIds: [ev3!.id],
             whatWeStillNeedToLearn: ["How frequently do zoning rules change across local Tri-Cities jurisdictions?"]
           },
           {
@@ -248,7 +248,7 @@ describe("Redesigned 12-Section Synthesis & Reasoning Pipeline", () => {
             interventionFit: "ai_assisted",
             evidenceStrength: "Strong",
             status: "Potential opportunity",
-            evidenceIds: [ev4.id],
+            evidenceIds: [ev4!.id],
             whatWeStillNeedToLearn: ["What percentage of quotes match standard historical templates?"]
           },
           {
@@ -259,7 +259,7 @@ describe("Redesigned 12-Section Synthesis & Reasoning Pipeline", () => {
             interventionFit: "automation",
             evidenceStrength: "Moderate",
             status: "Area for exploration",
-            evidenceIds: [ev5.id],
+            evidenceIds: [ev5!.id],
             whatWeStillNeedToLearn: ["What is the current win rate on quotes followed up within 3 days vs 7 days?"]
           }
         ],
@@ -296,7 +296,7 @@ describe("Redesigned 12-Section Synthesis & Reasoning Pipeline", () => {
     expect(client.analystView.summary).toContain("Mustang Signs");
 
     // Provenance check
-    expect(client.opportunities[0]!.evidenceIds).toEqual([ev3.id]);
+    expect(client.opportunities[0]!.evidenceIds).toEqual([ev3!.id]);
     expect(sales.clientReport).toBe(client);
   });
 
@@ -312,7 +312,7 @@ describe("Redesigned 12-Section Synthesis & Reasoning Pipeline", () => {
       json: {
         headline: "Generic Services: Preliminary AI Opportunity Scan",
         yourBusiness: "Generic Services is a small service provider.",
-        whatWeHeard: [{ observation: "The company provides general services.", evidenceIds: [ev.id] }],
+        whatWeHeard: [{ observation: "The company provides general services.", evidenceIds: [ev!.id] }],
         aiJourney: { stage: "Early awareness", explanation: "Early stages of considering AI." },
         aiCulture: { whatMayHelp: ["Curiosity"], whatMayMakeAdoptionHarder: ["Lack of defined workflows"], whereAiMayHelp: "Preliminary workflow definition." },
         yourData: { dataIdentified: [], whyThisMatters: "No specific data stores were identified." },

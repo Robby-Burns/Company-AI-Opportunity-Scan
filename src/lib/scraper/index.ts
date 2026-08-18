@@ -13,9 +13,10 @@
  * job-listings-fetch, review-search-fetch.
  */
 import { chromium, type Browser, type Page } from "playwright";
-import { addEvidence } from "@/lib/evidence/store";
+import { addEvidence, getScan, setDisambiguationCandidates, updateScanWebsite } from "@/lib/evidence/store";
 import { sanitize } from "@/lib/security/sanitize";
 import { assertSafeHost, isValidHttpUrl, safeFetch, type SafeFetchResult } from "@/lib/security/ssrf";
+import { searchCompany } from "@/lib/scraper/search";
 
 export type ProgressCb = (event: ScraperProgress) => void;
 
@@ -41,15 +42,64 @@ export interface ScraperResult {
 const NAV_PATHS = ["", "about", "services", "careers", "contact", "team", "products", "solutions"];
 
 /**
- * Run the scrape. Calls `onProgress` with status events for the SSE stream.
+ * Run the scrape or autonomous search discovery.
+ * Calls `onProgress` with status events for the SSE stream.
  * Never throws — failures become warnings (graceful degradation).
  */
 export async function runScraper(input: ScraperInput, onProgress: ProgressCb): Promise<ScraperResult> {
   const warnings: string[] = [];
-  const website = (input.website ?? "").trim();
+  let website = (input.website ?? "").trim();
+  const scan = getScan(input.scanId);
+
+  // If no direct website was entered, perform autonomous search discovery
+  if (!website && scan) {
+    onProgress({ step: "start", message: "Searching public records for company profile…", pct: 15 });
+    const discovery = await searchCompany({
+      scanId: input.scanId,
+      company: scan.company,
+      location: scan.location,
+      notes: scan.notes,
+      timeoutMs: Math.min(input.timeoutMs, 4500)
+    });
+
+    if (discovery.tier === "HIGH_CONFIDENCE" && discovery.topMatch) {
+      onProgress({
+        step: "web",
+        message: `Found high-confidence profile (${discovery.topMatch.domain})…`,
+        pct: 35
+      });
+      // Store instant verified search snippet
+      addEvidence(input.scanId, {
+        kind: "SEARCH_SNIPPET_VERIFIED",
+        source: discovery.topMatch.url,
+        snippet: `${discovery.topMatch.title}: ${discovery.topMatch.snippet}`,
+        signal: `discovery:${discovery.topMatch.domain}`,
+        confidence: "high"
+      });
+      website = discovery.topMatch.url;
+      updateScanWebsite(input.scanId, website);
+
+      // If it's an aggregator (Yelp/Facebook/etc), avoid deep browser crawling
+      if (discovery.topMatch.isAggregator) {
+        onProgress({ step: "done", message: "Public profile verified. Proceeding to interview…", pct: 100 });
+        const { listEvidence } = await import("@/lib/evidence/store");
+        return { evidenceCount: listEvidence(input.scanId).length, warnings: [], pageHtml: "" };
+      }
+    } else if (discovery.tier === "AMBIGUOUS_CANDIDATES") {
+      setDisambiguationCandidates(input.scanId, discovery.candidates);
+      onProgress({
+        step: "done",
+        message: "Found possible matches online. Preparing quick confirmation…",
+        pct: 100
+      });
+      return { evidenceCount: 0, warnings: [], pageHtml: "" };
+    } else {
+      onProgress({ step: "done", message: "Context ready. Proceeding to discovery interview…", pct: 100 });
+      return { evidenceCount: 0, warnings: [], pageHtml: "" };
+    }
+  }
 
   if (!website) {
-    onProgress({ step: "start", message: "No website provided. Preparing interview context…", pct: 50 });
     onProgress({ step: "done", message: "Context ready. Proceeding to discovery interview…", pct: 100 });
     return { evidenceCount: 0, warnings: [], pageHtml: "" };
   }
@@ -291,4 +341,21 @@ async function fetchReviewSignal(scanId: string, website: string): Promise<void>
       confidence: "low"
     });
   }
+}
+
+/**
+ * Asynchronously crawl a verified candidate website in the background.
+ * Seeds deeper evidence (SCRAPED_TECH, SCRAPED_JOBS, SCRAPED_WEB) for later interview questions
+ * without blocking Question 2.
+ */
+export function scrapeWebsiteInBackground(scanId: string, website: string, timeoutMs: number = 20000): void {
+  if (!website || !isValidHttpUrl(website)) return;
+  // Fire and forget in the background
+  (async () => {
+    try {
+      await runScraper({ scanId, website, timeoutMs }, () => {});
+    } catch {
+      // Graceful background degradation
+    }
+  })().catch(() => {});
 }

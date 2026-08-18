@@ -94,7 +94,7 @@ describe("Retention sweep — per-class (spec §6.5)", () => {
         whatsNext: "",
         evidenceIds: [],
         generatedAt: now
-      }
+      } as any
     }));
 
     return Promise.resolve().then(async () => {
