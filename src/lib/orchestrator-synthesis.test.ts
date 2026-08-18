@@ -17,8 +17,10 @@ vi.mock("@/lib/llm", () => {
 import * as llmModule from "@/lib/llm";
 import { createScan, addEvidence, listEvidence, deleteScan, allScans } from "@/lib/evidence/store";
 import { initInterview, nextQuestion, ingestResponse, isInterviewFinished, getInterviewState } from "@/lib/orchestrator";
-import { synthesizeReports, createIntakePackage } from "@/lib/synthesis";
+import { synthesizeReports, createIntakePackage, type ClientReport } from "@/lib/synthesis";
 import { selectDimension, determineDepth, selectCandidate } from "@/lib/interview/coordinator";
+import { renderClientSummaryPdf } from "@/lib/pdf";
+import { getFoxAndLoomLogoBase64 } from "@/components/pdf/client-summary-pdf";
 import type { CandidateQuestion, DimensionCoverage, LensId } from "@/lib/interview/types";
 
 const completeMock = (llmModule as unknown as { __completeMock: ReturnType<typeof vi.fn> }).__completeMock;
@@ -448,5 +450,57 @@ describe("Synthesis Boundary-Leakage & Anti-Vagueness Invariants", () => {
   });
 });
 
+describe("Client Summary PDF Fox & Loom branding & logo", () => {
+  it("finds the Fox & Loom logo on disk and converts to base64 data URI", () => {
+    const logoDataUrl = getFoxAndLoomLogoBase64();
+    expect(logoDataUrl).toBeDefined();
+    expect(logoDataUrl).toContain("data:image/png;base64,");
+  });
+
+  it("renders a valid PDF with Fox & Loom branding and returns PDF bytes", async () => {
+    const sampleReport: ClientReport = {
+      company: "Acme Logistics",
+      website: "https://acme.com",
+      headline: "Acme Logistics: Carrier Rate Confirmation Reconciliation",
+      companySnapshot: "A freight brokerage company.",
+      hypothesis: {
+        title: "Carrier Rate Reconciliation",
+        locus: "Daily discrepancy reconciliation between carrier rate confirmations and QuickBooks invoices",
+        summary: "Manual cross-checking causes billing delays and dispatcher rework.",
+        confidence: "high",
+        evidenceIds: ["ev-1"]
+      },
+      whyIdentified: [
+        { observation: "Dispatchers manually re-key carrier invoices into QuickBooks.", evidenceIds: ["ev-1"] }
+      ],
+      potentialImpact: [
+        { area: "Dispatch Operations", directionalImpact: "Reduces month-end reconciliation backlog.", evidenceIds: ["ev-1"] }
+      ],
+      additionalSignals: [
+        { signal: "Quote turnaround delays during peak afternoon volume.", evidenceIds: ["ev-2"] }
+      ],
+      whatRemainsUnknown: [
+        { unknown: "Carrier rate confirmation format consistency", whyItMatters: "Determines how structured the input data is." }
+      ],
+      deepAssessmentQuestions: [
+        "What percentage of rate confirmations require exception handling?",
+        "Are rate confirmations accessible via EDI/API or stored in email attachments?"
+      ],
+      whatsNext: "This scan flagged a potential opportunity worth looking into further. Figuring out whether it's feasible, valuable, safe, and actually worth building is what a Deep Assessment is for.",
+      evidenceIds: ["ev-1", "ev-2"],
+      generatedAt: Date.now()
+    };
+
+    const pdfBytes = await renderClientSummaryPdf(sampleReport);
+    expect(pdfBytes).toBeDefined();
+    expect(pdfBytes.length).toBeGreaterThan(500);
+
+    // PDF magic bytes check (%PDF-)
+    const header = Buffer.from(pdfBytes.slice(0, 5)).toString("ascii");
+    expect(header).toBe("%PDF-");
+  });
+});
+
 void getInterviewState;
+
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": 1787004843773,
+  "updatedAt": 1787013120749,
   "archetypes": [
     {
       "id": "arch_workflow_trace",
@@ -30,7 +30,7 @@
       "variance": 0,
       "invalidationsCount": 0,
       "discrepanciesCount": 0,
-      "lastUpdated": 1787004843762
+      "lastUpdated": 1787013120739
     },
     {
       "id": "arch_exception_probe",
@@ -59,7 +59,7 @@
       "variance": 0,
       "invalidationsCount": 0,
       "discrepanciesCount": 0,
-      "lastUpdated": 1787004843762
+      "lastUpdated": 1787013120739
     },
     {
       "id": "arch_handoff_boundary",
@@ -88,7 +88,7 @@
       "variance": 0,
       "invalidationsCount": 0,
       "discrepanciesCount": 0,
-      "lastUpdated": 1787004843762
+      "lastUpdated": 1787013120739
     },
     {
       "id": "arch_signal_verification",
@@ -116,7 +116,7 @@
       "variance": 0,
       "invalidationsCount": 0,
       "discrepanciesCount": 0,
-      "lastUpdated": 1787004843762
+      "lastUpdated": 1787013120739
     },
     {
       "id": "arch_volume_cadence",
@@ -145,7 +145,7 @@
       "variance": 0,
       "invalidationsCount": 0,
       "discrepanciesCount": 0,
-      "lastUpdated": 1787004843773
+      "lastUpdated": 1787013120748
     },
     {
       "id": "arch_responsibility_role",
@@ -173,7 +173,7 @@
       "variance": 0,
       "invalidationsCount": 0,
       "discrepanciesCount": 0,
-      "lastUpdated": 1787004843762
+      "lastUpdated": 1787013120739
     }
   ]
 }

@@ -8,8 +8,8 @@ import React from "react";
 import type { ClientReport } from "@/lib/synthesis";
 import { ClientSummaryPdf } from "@/components/pdf/client-summary-pdf";
 
-export async function renderClientSummaryPdf(report: ClientReport): Promise<Uint8Array> {
-  const element = React.createElement(ClientSummaryPdf, { report }) as unknown as React.ReactElement<DocumentProps>;
+export async function renderClientSummaryPdf(report: ClientReport, logoSrc?: string): Promise<Uint8Array> {
+  const element = React.createElement(ClientSummaryPdf, { report, logoSrc }) as unknown as React.ReactElement<DocumentProps>;
   const buf = await renderToBuffer(element);
   // Node Buffer → Uint8Array (Buffer is a Uint8Array subclass already).
   return buf as unknown as Uint8Array;

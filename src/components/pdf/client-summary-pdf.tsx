@@ -1,8 +1,12 @@
+import React from "react";
+import path from "node:path";
+import fs from "node:fs";
 import {
   Document,
   Page,
   View,
   Text,
+  Image,
   StyleSheet,
   Font,
   Link
@@ -12,21 +16,26 @@ import { content } from "@/content";
 
 // Use built-in Helvetica (fast + offline).
 const styles = StyleSheet.create({
-  page: { paddingTop: 44, paddingBottom: 52, paddingHorizontal: 44, fontFamily: "Helvetica", fontSize: 10.5, color: "#2A2D3A" },
-  header: { borderBottomWidth: 2, borderBottomColor: "#BF9036", paddingBottom: 10, marginBottom: 16 },
-  brand: { fontSize: 15, fontFamily: "Helvetica-Bold", color: "#2F3359" },
-  tagline: { fontSize: 8.5, color: "#6B6F7A", marginTop: 2 },
-  h1: { fontSize: 18, fontFamily: "Helvetica-Bold", color: "#2F3359", marginBottom: 4 },
-  meta: { fontSize: 8.5, color: "#6B6F7A", marginBottom: 14 },
-  sectionTitle: { fontSize: 11.5, fontFamily: "Helvetica-Bold", color: "#2F3359", marginTop: 12, marginBottom: 5 },
-  card: { borderWidth: 1, borderColor: "#E4E1DA", borderRadius: 5, padding: 10, marginBottom: 8, backgroundColor: "#FAF7F0" },
-  cardTitle: { fontSize: 11, fontFamily: "Helvetica-Bold", color: "#2F3359", marginBottom: 3 },
-  badge: { fontSize: 8, color: "#8A6A1F", fontFamily: "Helvetica-Bold", marginBottom: 3 },
-  body: { fontSize: 10, lineHeight: 1.45, color: "#2A2D3A" },
-  bodyMuted: { fontSize: 9.5, lineHeight: 1.4, color: "#5A5D6A", marginTop: 2 },
-  ev: { fontSize: 7.5, color: "#8A6A1F", marginTop: 4 },
-  bullet: { fontSize: 9.5, lineHeight: 1.4, color: "#3A3D4A", marginBottom: 3 },
-  footer: { position: "absolute", bottom: 24, left: 44, right: 44, fontSize: 7.5, color: "#9A9DA6", textAlign: "center", borderTopWidth: 1, borderTopColor: "#E4E1DA", paddingTop: 6 }
+  page: { paddingTop: 36, paddingBottom: 48, paddingHorizontal: 40, fontFamily: "Helvetica", fontSize: 10, color: "#2A2D3A" },
+  header: { borderBottomWidth: 1.5, borderBottomColor: "#BF9036", paddingBottom: 10, marginBottom: 14 },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  brandGroup: { flexDirection: "row", alignItems: "center" },
+  logo: { width: 32, height: 32, borderRadius: 16, marginRight: 10 },
+  brandTitleBlock: { flexDirection: "column" },
+  brand: { fontSize: 13, fontFamily: "Helvetica-Bold", color: "#2F3359", letterSpacing: 0.5 },
+  tagline: { fontSize: 8, color: "#6B6F7A", marginTop: 1 },
+  headerBadge: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#8A6A1F", letterSpacing: 0.8 },
+  h1: { fontSize: 17, fontFamily: "Helvetica-Bold", color: "#2F3359", marginBottom: 3, marginTop: 4 },
+  meta: { fontSize: 8.5, color: "#6B6F7A", marginBottom: 12 },
+  sectionTitle: { fontSize: 11, fontFamily: "Helvetica-Bold", color: "#2F3359", marginTop: 10, marginBottom: 4 },
+  card: { borderWidth: 1, borderColor: "#E4E1DA", borderRadius: 4, padding: 9, marginBottom: 7, backgroundColor: "#FAF7F0" },
+  cardTitle: { fontSize: 10.5, fontFamily: "Helvetica-Bold", color: "#2F3359", marginBottom: 2 },
+  badge: { fontSize: 7.5, color: "#8A6A1F", fontFamily: "Helvetica-Bold", marginBottom: 2 },
+  body: { fontSize: 9.5, lineHeight: 1.45, color: "#2A2D3A" },
+  bodyMuted: { fontSize: 9, lineHeight: 1.4, color: "#5A5D6A", marginTop: 2 },
+  ev: { fontSize: 7.5, color: "#8A6A1F", marginTop: 3 },
+  bullet: { fontSize: 9.5, lineHeight: 1.4, color: "#3A3D4A", marginBottom: 2.5 },
+  footer: { position: "absolute", bottom: 20, left: 40, right: 40, fontSize: 7.5, color: "#9A9DA6", textAlign: "center", borderTopWidth: 1, borderTopColor: "#E4E1DA", paddingTop: 5 }
 });
 
 void Font;
@@ -49,12 +58,35 @@ function s(value: string | undefined | null): string {
     .trim();
 }
 
-export function ClientSummaryPdf({ report }: { report: ClientReport }) {
+/**
+ * Locate the Fox & Loom logo file and convert to a base64 Data URI for PDF rendering.
+ */
+export function getFoxAndLoomLogoBase64(): string | undefined {
+  try {
+    const candidates = [
+      path.join(process.cwd(), "public", "logo.png"),
+      path.join(process.cwd(), "logo.png")
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        const data = fs.readFileSync(p);
+        return `data:image/png;base64,${data.toString("base64")}`;
+      }
+    }
+  } catch {
+    // Return undefined if fs not accessible
+  }
+  return undefined;
+}
+
+export function ClientSummaryPdf({ report, logoSrc }: { report: ClientReport; logoSrc?: string }) {
   const date = new Date(report.generatedAt).toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
     day: "numeric"
   });
+
+  const logo = logoSrc ?? getFoxAndLoomLogoBase64();
 
   return (
     <Document
@@ -64,8 +96,19 @@ export function ClientSummaryPdf({ report }: { report: ClientReport }) {
     >
       <Page size="A4" style={styles.page}>
         <View style={styles.header} fixed>
-          <Text style={styles.brand}>{s(content.orgName)}</Text>
-          <Text style={styles.tagline}>Humans helping humans · foxandloom.com</Text>
+          <View style={styles.headerRow}>
+            <View style={styles.brandGroup}>
+              {logo ? (
+                // eslint-disable-next-line jsx-a11y/alt-text
+                <Image src={logo} style={styles.logo} />
+              ) : null}
+              <View style={styles.brandTitleBlock}>
+                <Text style={styles.brand}>{s(content.orgName)}</Text>
+                <Text style={styles.tagline}>Humans helping humans · foxandloom.com</Text>
+              </View>
+            </View>
+            <Text style={styles.headerBadge}>AI OPPORTUNITY SCAN</Text>
+          </View>
         </View>
 
         <Text style={styles.h1}>{s(report.headline)}</Text>
