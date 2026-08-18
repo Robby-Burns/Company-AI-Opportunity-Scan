@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { evaluateScanReport, evaluateMechanicalIntegrity, evaluateQualitativeQuality } from "./evaluator";
+import { evaluateScanReport, evaluateHardFailures, evaluateCriteria } from "./evaluator";
 import { SEED_EXEMPLARS } from "./seed-exemplars";
+import { HardFailureCode } from "./types";
 import type { ClientReport } from "@/lib/synthesis";
 
-describe("Dataset B: Quality Evaluation Engine & Exemplars", () => {
-  it("contains 10 reference exemplars strictly isolated from prompt generation", () => {
+describe("Dataset B: Opportunity Scan Evaluator & Rubric", () => {
+  it("contains 10 reference exemplars isolated from prompt generation context", () => {
     expect(SEED_EXEMPLARS.length).toBe(10);
     for (const ex of SEED_EXEMPLARS) {
       expect(ex.id).toBeDefined();
@@ -12,8 +13,6 @@ describe("Dataset B: Quality Evaluation Engine & Exemplars", () => {
       expect(ex.businessDescription).toBeDefined();
       expect(ex.whatWeHeard.length).toBeGreaterThan(0);
       expect(ex.interventions.length).toBeGreaterThan(0);
-      expect(ex.whatWeStillNeedToLearn).toBeDefined();
-      expect(ex.ourTakeaway).toBeDefined();
     }
   });
 
@@ -23,10 +22,10 @@ describe("Dataset B: Quality Evaluation Engine & Exemplars", () => {
     headline: "Acme Logistics: Preliminary AI Opportunity Scan",
     generatedAt: Date.now(),
     evidenceIds: ["ev_1", "ev_2"],
-    yourBusiness: "Acme Logistics operates regional freight hauling with 45 dispatchers.",
+    yourBusiness: "Acme Logistics operates regional freight hauling with 45 dispatchers and custom TMS integration.",
     whatWeHeard: [
       {
-        observation: "Dispatchers spend 2 hours daily re-keying customer bills of lading.",
+        observation: "Dispatchers spend 2 hours daily re-keying customer bills of lading into legacy TMS.",
         evidenceIds: ["ev_1"]
       }
     ],
@@ -36,7 +35,7 @@ describe("Dataset B: Quality Evaluation Engine & Exemplars", () => {
     },
     aiCulture: {
       whatMayHelp: ["High interest in reducing manual entry"],
-      whatMayMakeAdoptionHarder: ["Skepticism from senior dispatchers"],
+      whatMayMakeAdoptionHarder: ["Skepticism from senior dispatchers regarding accuracy"],
       whereAiMayHelp: "Drafting structured manifests"
     },
     dataAndTechnology: {
@@ -49,7 +48,7 @@ describe("Dataset B: Quality Evaluation Engine & Exemplars", () => {
       workflowFriction: [{ stage: "Intake", friction: "PDF transcription", evidenceIds: ["ev_1"] }],
       leveragePatterns: [{ category: "Boring administrative work", observation: "Manual data entry", evidenceIds: ["ev_1"] }],
       fitBreakdown: {
-        wellSuited: ["Multimodal PDF ingestion"],
+        wellSuited: ["Multimodal PDF document extraction"],
         traditionalAutomationSuited: ["TMS status webhooks"],
         humanJudgmentRequired: ["Carrier price negotiation"]
       }
@@ -84,16 +83,17 @@ describe("Dataset B: Quality Evaluation Engine & Exemplars", () => {
     }
   };
 
-  it("passes mechanical integrity for compliant reports", () => {
+  it("passes all hard-failure checks and achieves a low penalty score for valid reports", () => {
     const validEvidenceIds = new Set(["ev_1", "ev_2"]);
-    const mech = evaluateMechanicalIntegrity(validReport, validEvidenceIds);
-    expect(mech.passed).toBe(true);
-    expect(mech.provenanceIssues).toHaveLength(0);
-    expect(mech.roiViolations).toHaveLength(0);
-    expect(mech.syntheticLeakage).toHaveLength(0);
+    const result = evaluateScanReport(validReport, validEvidenceIds);
+    expect(result.status).toBe("PASS");
+    expect(result.overallPassed).toBe(true);
+    expect(result.hardFailures).toHaveLength(0);
+    expect(result.overallPenaltyPct).toBeLessThan(20);
+    expect(result.totalPossiblePoints).toBeGreaterThan(0);
   });
 
-  it("catches invalid evidence provenance", () => {
+  it("triggers H1 for unverified evidence citations", () => {
     const invalidReport: ClientReport = {
       ...validReport,
       whatWeHeard: [
@@ -104,39 +104,62 @@ describe("Dataset B: Quality Evaluation Engine & Exemplars", () => {
       ]
     };
     const validEvidenceIds = new Set(["ev_1", "ev_2"]);
-    const mech = evaluateMechanicalIntegrity(invalidReport, validEvidenceIds);
-    expect(mech.passed).toBe(false);
-    expect(mech.provenanceIssues.length).toBeGreaterThan(0);
+    const hChecks = evaluateHardFailures(invalidReport, validEvidenceIds);
+    const h1 = hChecks.find((c) => c.code === HardFailureCode.H1);
+    expect(h1?.passed).toBe(false);
+
+    const result = evaluateScanReport(invalidReport, validEvidenceIds);
+    expect(result.status).toBe("FAIL");
+    expect(result.hardFailures).toContain(HardFailureCode.H1);
   });
 
-  it("catches forbidden financial ROI claims and numerical maturity scores", () => {
+  it("triggers H2 for forbidden financial ROI and numerical maturity scores", () => {
     const roiReport: ClientReport = {
       ...validReport,
       headline: "Acme Logistics: Save $250k with 300% ROI (Maturity 3.5/5)"
     };
     const validEvidenceIds = new Set(["ev_1", "ev_2"]);
-    const mech = evaluateMechanicalIntegrity(roiReport, validEvidenceIds);
-    expect(mech.passed).toBe(false);
-    expect(mech.roiViolations.length).toBeGreaterThan(0);
+    const result = evaluateScanReport(roiReport, validEvidenceIds);
+    expect(result.status).toBe("FAIL");
+    expect(result.hardFailures).toContain(HardFailureCode.H2);
   });
 
-  it("catches synthetic Dataset B exemplar text leakage", () => {
+  it("triggers H6 for synthetic Dataset B exemplar text leakage", () => {
     const leakedReport: ClientReport = {
       ...validReport,
       yourBusiness: "Managing 2,400 residential units across 14 multi-family properties as a Regional Property Management Firm."
     };
     const validEvidenceIds = new Set(["ev_1", "ev_2"]);
-    const mech = evaluateMechanicalIntegrity(leakedReport, validEvidenceIds);
-    expect(mech.passed).toBe(false);
-    expect(mech.syntheticLeakage.length).toBeGreaterThan(0);
+    const result = evaluateScanReport(leakedReport, validEvidenceIds);
+    expect(result.status).toBe("FAIL");
+    expect(result.hardFailures).toContain(HardFailureCode.H6);
   });
 
-  it("runs full two-pass evaluation and returns structured report", () => {
+  it("triggers H7 for unverified inferences presented as fact", () => {
+    const inferentialReport: ClientReport = {
+      ...validReport,
+      yourBusiness: "Acme Logistics operates freight. Employees probably spend hours wrestling with manual data entry."
+    };
     const validEvidenceIds = new Set(["ev_1", "ev_2"]);
-    const result = evaluateScanReport(validReport, validEvidenceIds);
-    expect(result.overallPassed).toBe(true);
-    expect(result.qualitative.intellectualHonesty).toBe("PASS");
-    expect(result.qualitative.companySpecificity).toBe("PASS");
-    expect(result.qualitative.sectionIntegrity).toBe("PASS");
+    const result = evaluateScanReport(inferentialReport, validEvidenceIds);
+    expect(result.status).toBe("FAIL");
+    expect(result.hardFailures).toContain(HardFailureCode.H7);
+  });
+
+  it("enforces max 3 opportunities rule (O1)", () => {
+    const opp = validReport.opportunities[0]!;
+    const paddedReport: ClientReport = {
+      ...validReport,
+      opportunities: [
+        opp,
+        { ...opp, title: "Opp 2" },
+        { ...opp, title: "Opp 3" },
+        { ...opp, title: "Opp 4" }
+      ]
+    };
+    const validEvidenceIds = new Set(["ev_1", "ev_2"]);
+    const crits = evaluateCriteria(paddedReport, validEvidenceIds);
+    const o1 = crits.find((c) => c.id === "O1");
+    expect(o1?.verdict).toBe("FAIL");
   });
 });
