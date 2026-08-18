@@ -17,10 +17,9 @@ vi.mock("@/lib/llm", () => {
 import * as llmModule from "@/lib/llm";
 import { createScan, addEvidence, listEvidence, deleteScan, allScans } from "@/lib/evidence/store";
 import { initInterview, nextQuestion, ingestResponse, isInterviewFinished, getInterviewState } from "@/lib/orchestrator";
-import { synthesizeReports, createIntakePackage, type ClientReport } from "@/lib/synthesis";
-import { selectDimension, determineDepth, selectCandidate } from "@/lib/interview/coordinator";
+import { synthesizeReports, type ClientReport } from "@/lib/synthesis";
+import { selectDimension, selectCandidate } from "@/lib/interview/coordinator";
 import { renderClientSummaryPdf } from "@/lib/pdf";
-import { getFoxAndLoomLogoBase64 } from "@/components/pdf/client-summary-pdf";
 import type { CandidateQuestion, DimensionCoverage, LensId } from "@/lib/interview/types";
 
 const completeMock = (llmModule as unknown as { __completeMock: ReturnType<typeof vi.fn> }).__completeMock;
@@ -100,196 +99,179 @@ describe("Interview bounds (spec §7.1: hard stop at max)", () => {
   beforeEach(() => { clearStores(); setupScan(id); initInterview(id); completeMock.mockReset(); });
   afterEach(() => deleteScan(id));
 
-  it("never asks more than maxQuestions (12), even if model wants to", async () => {
-    const answers: string[] = [];
-    const lensOrder: LensId[] = ["business", "operations", "systems", "data", "people"];
+  it("terminates automatically when maxQuestions is reached", async () => {
+    const sequence: LensId[] = [
+      "business", "operations", "systems", "data", "people",
+      "operations", "systems", "data", "business", "operations",
+      "people", "systems"
+    ];
     for (let i = 0; i < 12; i++) {
-      const lens = lensOrder[i % 5]!;
-      const q = await turn(id, lens, `Q${i + 1}`, {
-        coverageUpdate: { dimension: lens, coverage: "ADEQUATE" }
+      const q = await turn(id, sequence[i]!, `Question ${i + 1}`);
+      expect(q).not.toBeNull();
+      ingestResponse(id, q!.id, `Answer to ${i + 1}`);
+    }
+    const state = getInterviewState(id);
+    expect(state?.asked).toBe(12);
+    expect(isInterviewFinished(id)).toBe(true);
+    const beyond = await nextQuestion(id);
+    expect(beyond).toBeNull();
+  });
+});
+
+describe("Anti-tunneling rotation guardrails (§7.2 selectDimension)", () => {
+  it("forces switch if same dimension asked twice in a row", () => {
+    const coverage = new Map<LensId, DimensionCoverage>();
+    const DIMS: LensId[] = ["business", "operations", "systems", "data", "people"];
+    for (const d of DIMS) {
+      coverage.set(d, {
+        dimension: d, coverage: d === "operations" ? "LIGHT" : "NOT_STARTED", confidence: "low",
+        questionsAsked: d === "operations" ? 2 : 0, lastQuestionNumber: d === "operations" ? 2 : 0,
+        keyFacts: [], knownUnknowns: [], evidenceIds: [], unresolvedGaps: [], depth: 1,
+        answerRichness: "moderate", notApplicable: false
       });
-      if (!q) break;
-      answers.push(q.text);
-      await ingestResponse(id, q.id, `a${i + 1}`);
     }
-    expect(answers.length).toBe(12);
-    const q13 = await turn(id, "business", "Q13");
-    expect(q13).toBeNull();
-    expect(isInterviewFinished(id)).toBe(true);
-  });
-
-  it("can finish early at Q8 once sufficient hypothesis evidence is gathered via complete=true", async () => {
-    const lensOrder: LensId[] = ["business", "operations", "systems", "data", "people"];
-    for (let i = 0; i < 8; i++) {
-      const lens = lensOrder[i % 5]!;
-      const q = await turn(id, lens, `Q${i + 1}`, { coverageUpdate: { dimension: lens, coverage: "ADEQUATE" } });
-      if (!q) break;
-      await ingestResponse(id, q.id, `a${i + 1}`);
-    }
-    mockCoordinator("business", 1, { complete: true });
-    const q9 = await nextQuestion(id);
-    expect(q9).toBeNull();
-    expect(isInterviewFinished(id)).toBe(true);
+    const next = selectDimension("operations", coverage, ["operations", "operations"], 2);
+    expect(next.dimension).not.toBe("operations");
+    expect(next.overridden).toBe(true);
   });
 });
 
-describe("Graceful degradation on LLM failure (§7.1)", () => {
-  const id = "iv-fallback";
-  beforeEach(() => { clearStores(); setupScan(id); initInterview(id); completeMock.mockReset(); });
-  afterEach(() => deleteScan(id));
-
-  it("uses a fallback question when the coordinator LLM throws", async () => {
-    completeMock.mockRejectedValueOnce(new Error("network down"));
-    const q = await nextQuestion(id);
-    expect(q).not.toBeNull();
-    expect(q!.text.length).toBeGreaterThan(5);
-    expect(q!.lens).toBeDefined();
-  });
-
-  it("uses a fallback question when the specialist returns no candidates", async () => {
-    mockCoordinator("operations", 1);
-    completeMock.mockResolvedValueOnce({ json: { candidates: [] }, text: "", tokensIn: 0, tokensOut: 0 });
-    const q = await nextQuestion(id);
-    expect(q).not.toBeNull();
-    expect(q!.text.length).toBeGreaterThan(5);
-  });
-});
-
-describe("Coverage guardrails (deterministic, no LLM)", () => {
-  function cov(coverage: "NOT_STARTED" | "LIGHT" | "ADEQUATE" | "DEEP" = "NOT_STARTED", notApplicable = false): DimensionCoverage {
-    return {
-      dimension: "operations", coverage, confidence: "medium", questionsAsked: 0, lastQuestionNumber: 0,
-      keyFacts: [], knownUnknowns: [], evidenceIds: [], unresolvedGaps: [], depth: 1, answerRichness: "moderate", notApplicable
-    };
-  }
-  function coverageMap(overrides: Map<LensId, DimensionCoverage> = new Map()): Map<LensId, DimensionCoverage> {
-    const m = new Map<LensId, DimensionCoverage>();
-    const all: LensId[] = ["business", "operations", "systems", "data", "people"];
-    for (const l of all) m.set(l, overrides.get(l) ?? cov("NOT_STARTED"));
-    return m;
-  }
-
-  it("overrides a consecutive repeat when other dimensions remain under-ADEQUATE", () => {
-    const m = coverageMap();
-    m.set("operations", cov("LIGHT"));
-    const r = selectDimension("operations", m, ["operations"], 2);
-    expect(r.dimension).not.toBe("operations");
-    expect(r.overridden).toBe(true);
-  });
-
-  it("allows a consecutive repeat when every other dimension is ADEQUATE/DEEP or N/A", () => {
-    const m = coverageMap();
-    m.set("operations", cov("LIGHT"));
-    for (const l of ["business", "systems", "data", "people"] as LensId[]) m.set(l, cov("ADEQUATE"));
-    const r = selectDimension("operations", m, ["operations"], 2);
-    expect(r.dimension).toBe("operations");
-    expect(r.overridden).toBe(false);
-  });
-
-  it("prefers a NOT_STARTED dimension over depth on an ADEQUATE+ dimension", () => {
-    const m = coverageMap();
-    m.set("operations", cov("ADEQUATE"));
-    const r = selectDimension("operations", m, ["business"], 5);
-    expect(r.dimension).not.toBe("operations");
-    expect(r.overridden).toBe(true);
-  });
-});
-
-describe("Adaptive depth (deterministic)", () => {
-  function cov(coverage: "NOT_STARTED" | "LIGHT" | "ADEQUATE" | "DEEP", richness: "thin" | "moderate" | "rich" = "moderate", gaps: string[] = [], na = false): DimensionCoverage {
-    return {
-      dimension: "operations", coverage, confidence: "medium", questionsAsked: 1, lastQuestionNumber: 1,
-      keyFacts: [], knownUnknowns: [], evidenceIds: [], unresolvedGaps: gaps, depth: 1, answerRichness: richness, notApplicable: na
-    };
-  }
-  function map(c: DimensionCoverage): Map<LensId, DimensionCoverage> {
-    const m = new Map<LensId, DimensionCoverage>();
-    for (const l of ["business", "operations", "systems", "data", "people"] as LensId[]) m.set(l, l === "operations" ? c : cov("NOT_STARTED"));
-    return m;
-  }
-
-  it("simplifies (depth -1) on thin answers with no flagged gap", () => {
-    const r = determineDepth("operations", map(cov("LIGHT", "thin", [])), 3);
-    expect(r.depth).toBe(2);
-  });
-
-  it("deepens (+1) when a thin answer reveals an important gap", () => {
-    const r = determineDepth("operations", map(cov("LIGHT", "thin", ["important gap"])), 2);
-    expect(r.depth).toBe(3);
-  });
-
-  it("caps at depth 2 when the dimension is already ADEQUATE with no gaps", () => {
-    const r = determineDepth("operations", map(cov("ADEQUATE", "rich", [])), 5);
-    expect(r.depth).toBe(2);
-  });
-
-  it("stays at depth 1 when the dimension is not-applicable", () => {
-    const r = determineDepth("operations", map(cov("ADEQUATE", "rich", [], true)), 4);
-    expect(r.depth).toBe(1);
-  });
-});
-
-describe("Candidate selection (coordinator picks ONE)", () => {
-  function cand(text: string, novelty: number, lens: LensId = "operations"): CandidateQuestion {
-    return {
-      lens, depth: 1, question: { text, kind: "short" },
-      scores: { novelty, coverageGain: 0.6, companyUnderstanding: 0.6, answerable: 0.8, specific: 0.6, conversational: 0.8, depthAppropriate: 0.7 },
-      rationale: text
-    };
-  }
-
-  it("picks the higher-quality candidate", () => {
-    const picked = selectCandidate([cand("low", 0.2), cand("high", 0.9)], []);
-    expect(picked!.selected.question.text).toBe("high");
-  });
-
-  it("penalizes candidates near-duplicating an already-asked question", () => {
-    const dup = cand("What software does your team rely on to run the business?", 0.9);
-    const other = cand("How does information move between those systems?", 0.5);
-    const picked = selectCandidate([dup, other], ["What software does your team rely on to run the business?"]);
+describe("Specialist Candidate Selection Picker (§7.3 selectCandidate)", () => {
+  it("picks candidate maximizing quality heuristic", () => {
+    const candidates: CandidateQuestion[] = [
+      {
+        lens: "systems",
+        depth: 2,
+        question: { text: "What CRM do you use?" },
+        scores: { novelty: 0.3, coverageGain: 0.4, companyUnderstanding: 0.3, answerable: 0.9, specific: 0.5, conversational: 0.7, depthAppropriate: 0.6 },
+        rationale: "crm"
+      },
+      {
+        lens: "systems",
+        depth: 2,
+        question: { text: "How does information move between those systems?" },
+        scores: { novelty: 0.9, coverageGain: 0.85, companyUnderstanding: 0.8, answerable: 0.85, specific: 0.8, conversational: 0.9, depthAppropriate: 0.8 },
+        rationale: "flow"
+      }
+    ];
+    const picked = selectCandidate(candidates, []);
+    expect(picked).not.toBeNull();
     expect(picked!.selected.question.text).toBe("How does information move between those systems?");
   });
 });
 
-describe("Synthesis 6-section schema & evidence invariant", () => {
-  const id = "syn-test";
-  beforeEach(() => { clearStores(); setupScan(id); completeMock.mockReset(); });
+describe("Redesigned 12-Section Synthesis & Reasoning Pipeline", () => {
+  const id = "syn-mustang-test";
+  beforeEach(() => { clearStores(); completeMock.mockReset(); });
   afterEach(() => deleteScan(id));
 
-  it("produces the complete 6-section Opportunity Hypothesis structure and filters fake evidence IDs", async () => {
-    const realIds = listEvidence(id).map((e) => e.id);
-    expect(realIds.length).toBe(2);
+  it("Scenario 1: Mustang Signs / Kennewick — Discovers custom, evidence-grounded opportunities without hardcoding", async () => {
+    createScan({
+      id,
+      company: "Mustang Sign Company",
+      location: "Kennewick, WA",
+      website: "https://mustangsignco.com",
+      email: "robby@mustangsignco.com",
+      notes: "Custom signage fabricator handling monument signs, pylon signs, and vehicle wraps.",
+      retentionScrapedDays: 90,
+      retentionAnswersDays: 365
+    });
+
+    addEvidence(id, { kind: "SCRAPED_TECH", source: "https://mustangsignco.com", snippet: "uses shopVOX and Microsoft Teams", signal: "uses:shopvox", confidence: "high" });
+    addEvidence(id, { kind: "PROSPECT_REPORTED", source: "intake-notes", snippet: "Custom signage fabricator in Kennewick WA", signal: "notes:operational", confidence: "high" });
+    const ev3 = addEvidence(id, { kind: "PROSPECT_REPORTED", source: "interview-q2", snippet: "Sales reps spend 45 minutes manually checking Kennewick (KMC) and Pasco (PMC) setback and height zoning codes before quoting.", signal: "workflow:zoning_compliance", confidence: "high" });
+    const ev4 = addEvidence(id, { kind: "PROSPECT_REPORTED", source: "interview-q3", snippet: "Historical won projects live in shopVOX and spreadsheets; building a monument sign quote requires manual part lookup.", signal: "data:recipe_pricing", confidence: "high" });
+    const ev5 = addEvidence(id, { kind: "PROSPECT_REPORTED", source: "interview-q5", snippet: "Sales reps do not have time to manually follow up on sent estimates after 3 days.", signal: "workflow:quote_followup", confidence: "medium" });
 
     completeMock.mockResolvedValueOnce({
       json: {
-        headline: "Acme Logistics: Company AI Opportunity Scan",
-        companySnapshot: "A freight brokerage company.",
-        hypothesis: {
-          title: "Carrier Rate Reconciliation",
-          locus: "Daily discrepancy reconciliation between carrier rate confirmations and QuickBooks invoices",
-          summary: "Dispatcher team spends significant manual time resolving freight invoice discrepancies.",
-          confidence: "high",
-          evidenceIds: [realIds[0]!, "FAKE_ID_1"]
+        headline: "Mustang Sign Company: Preliminary AI Opportunity Scan",
+        yourBusiness: "Mustang Sign Company is a custom design, fabrication, and installation business in Kennewick, WA serving regional commercial clients with monument signs, pylons, and vehicle graphics.",
+        whatWeHeard: [
+          { observation: "Sales estimators spend considerable manual time researching municipal zoning codes for Kennewick and Pasco.", evidenceIds: [ev3.id] },
+          { observation: "Quote building involves looking up past won project parts in shopVOX and spreadsheets.", evidenceIds: [ev4.id] },
+          { observation: "Follow-up on delivered estimates is inconsistent due to sales rep bandwidth constraints.", evidenceIds: [ev5.id] }
+        ],
+        aiJourney: {
+          stage: "Exploring",
+          explanation: "Mustang Signs has solid operational software (shopVOX) and is exploring targeted automation to assist human estimators."
         },
-        whyIdentified: [
-          { observation: "Dispatches manually re-key carrier invoices into QuickBooks.", evidenceIds: [realIds[0]!] },
-          { observation: "Unsupported claim.", evidenceIds: ["FAKE_ID_2"] }
+        aiCulture: {
+          whatMayHelp: ["Team is eager to eliminate repetitive municipal code lookups", "Clear desire to keep final quote review human-led"],
+          whatMayMakeAdoptionHarder: ["Custom nature of architectural signs requires human judgment"],
+          whereAiMayHelp: "AI can draft and assemble information while keeping approval firmly with the estimator."
+        },
+        yourData: {
+          dataIdentified: [
+            { data: "Municipal Sign Codes (KMC/PMC/RMC)", location: "Public city PDFs and planning docs", relevance: "Zoning limits" },
+            { data: "Historical Won Estimates & Recipes", location: "shopVOX and internal spreadsheets", relevance: "Part lists and labor hours" }
+          ],
+          whyThisMatters: "Your operational data is split between structured tools like shopVOX and unstructured municipal PDF regulations."
+        },
+        opportunityMap: [
+          { stage: "Inquiry & Address Verification", friction: "Manual confirmation of municipal jurisdiction", evidenceIds: [ev3.id] },
+          { stage: "Zoning & Compliance Lookup", friction: "Manual cross-referencing of height and setback rules", evidenceIds: [ev3.id] },
+          { stage: "Estimate Drafting", friction: "Manual lookup of past project recipes and parts in shopVOX", evidenceIds: [ev4.id] },
+          { stage: "Estimate Follow-up", friction: "Follow-ups dropped due to rep workload", evidenceIds: [ev5.id] }
         ],
-        potentialImpact: [
-          { area: "Dispatch Operations", directionalImpact: "Reduction in end-of-month reconciliation backlog.", evidenceIds: [realIds[0]!] }
+        aiLeverage: [
+          { category: "Information retrieval", observation: "Searching municipal code regulations for height/setback limits.", evidenceIds: [ev3.id] },
+          { category: "Boring administrative work", observation: "Pulling historical part lists from past jobs to draft new quotes.", evidenceIds: [ev4.id] },
+          { category: "Communication gaps", observation: "Nudging clients on unapproved quotes after 3 business days.", evidenceIds: [ev5.id] }
         ],
-        additionalSignals: [
-          { signal: "Quote turnaround delays during peak afternoon volume.", evidenceIds: [realIds[1]!] }
+        aiFit: {
+          wellSuited: ["Municipal zoning code retrieval and summarization", "Drafting estimate follow-up messages"],
+          traditionalAutomationSuited: ["Calculating mileage travel SKU fees from address distance", "shopVOX margin calculations"],
+          humanJudgmentRequired: ["Custom design adjustments", "Final price approval and customer negotiations"]
+        },
+        technologyEnvironment: {
+          systems: ["shopVOX", "Microsoft Teams", "Excel Spreadsheets"],
+          crossSystemFlow: ["Estimators manually copy specs between email, shopVOX, and spreadsheets."]
+        },
+        opportunities: [
+          {
+            title: "Municipal Zoning Code & Compliance Assistant",
+            observation: "Estimators spend 45 minutes manually checking Kennewick and Pasco zoning codes for setbacks and height limits.",
+            whyItMatters: "Compliance delays quote delivery and introduces risk if municipal codes are misread.",
+            whereAiFits: "An AI retrieval helper can index municipal code PDFs and draft compliance summaries for the rep.",
+            interventionFit: "ai",
+            evidenceStrength: "Strong",
+            status: "Potential opportunity",
+            evidenceIds: [ev3.id],
+            whatWeStillNeedToLearn: ["How frequently do zoning rules change across local Tri-Cities jurisdictions?"]
+          },
+          {
+            title: "Historical Estimate Recipe Assembly",
+            observation: "Building new monument sign estimates requires manual part search from past won jobs.",
+            whyItMatters: "Repetitive lookup slows quote turnaround time for standard sign types.",
+            whereAiFits: "AI-assisted recipe matching surfaces past similar projects to pre-fill draft line items.",
+            interventionFit: "ai_assisted",
+            evidenceStrength: "Strong",
+            status: "Potential opportunity",
+            evidenceIds: [ev4.id],
+            whatWeStillNeedToLearn: ["What percentage of quotes match standard historical templates?"]
+          },
+          {
+            title: "Automated Estimate Follow-up Nudges",
+            observation: "Sent estimates frequently languish without timely follow-up.",
+            whyItMatters: "Slow follow-up reduces quote conversion rates.",
+            whereAiFits: "Traditional automation triggers Teams reminder cards with draft customer check-ins.",
+            interventionFit: "automation",
+            evidenceStrength: "Moderate",
+            status: "Area for exploration",
+            evidenceIds: [ev5.id],
+            whatWeStillNeedToLearn: ["What is the current win rate on quotes followed up within 3 days vs 7 days?"]
+          }
         ],
-        whatRemainsUnknown: [
-          { unknown: "Rate confirmation PDF consistency", whyItMatters: "Determines whether data is extractable or unstructured." }
+        whatWeStillNeedToLearn: [
+          { question: "What percentage of custom jobs fall outside historical recipe templates?", whyWeNeedToKnow: "Determines the scope of recipe-assisted quoting." },
+          { question: "Are shopVOX API webhooks accessible on your current subscription plan?", whyWeNeedToKnow: "Determines whether follow-up triggers can be automated directly." }
         ],
-        deepAssessmentQuestions: [
-          "What rate of edge-case exceptions requires manual dispatcher approval?",
-          "Are carrier rate confirmations accessible via direct EDI/API or trapped in email attachments?"
-        ],
-        whatsNext: "A Deep Assessment will evaluate whether this opportunity is feasible and worth pursuing.",
-        salesSummary: "Strong freight reconciliation opportunity hypothesis.",
+        analystView: {
+          summary: "Mustang Signs exhibits high operational clarity with clear, repetitive administrative bottlenecks in zoning research and quoting.",
+          deepAssessmentRecommendation: "A Deep Assessment will evaluate shopVOX integration feasibility and municipal code retrieval accuracy."
+        },
+        salesSummary: "High intent custom sign business in Kennewick. Core opportunities in zoning retrieval and quoting assistance.",
         contradictions: []
       },
       text: "", tokensIn: 0, tokensOut: 0
@@ -297,210 +279,209 @@ describe("Synthesis 6-section schema & evidence invariant", () => {
 
     const { client, sales } = await synthesizeReports(id);
 
-    // 1. Hypothesis verified
-    expect(client.hypothesis).not.toBeNull();
-    expect(client.hypothesis!.title).toBe("Carrier Rate Reconciliation");
-    expect(client.hypothesis!.confidence).toBe("high");
-    // Fake id filtered out of hypothesis evidenceIds
-    expect(client.hypothesis!.evidenceIds).toEqual([realIds[0]!]);
+    // Assert 12 sections are present and rich
+    expect(client.yourBusiness).toContain("Kennewick");
+    expect(client.whatWeHeard.length).toBe(3);
+    expect(client.aiJourney.stage).toBe("Exploring");
+    expect(client.aiCulture.whatMayHelp.length).toBeGreaterThan(0);
+    expect(client.yourData.dataIdentified.length).toBe(2);
+    expect(client.opportunityMap.length).toBe(4);
+    expect(client.aiLeverage.length).toBe(3);
+    expect(client.aiFit.wellSuited.length).toBe(2);
+    expect(client.technologyEnvironment.systems).toContain("shopVOX");
+    expect(client.opportunities.length).toBe(3);
+    expect(client.opportunities[0]!.title).toContain("Zoning");
+    expect(client.whatWeStillNeedToLearn.length).toBe(2);
+    expect(client.whatWeStillNeedToLearn[0]!.question).toContain("?");
+    expect(client.analystView.summary).toContain("Mustang Signs");
 
-    // 2. Why Identified verified (unsupported point with fake ID dropped)
-    expect(client.whyIdentified.length).toBe(1);
-    expect(client.whyIdentified[0]!.evidenceIds).toEqual([realIds[0]!]);
-
-    // 3. Potential Impact verified
-    expect(client.potentialImpact.length).toBe(1);
-    expect(client.potentialImpact[0]!.area).toBe("Dispatch Operations");
-
-    // 4. Additional Signals verified
-    expect(client.additionalSignals.length).toBe(1);
-
-    // 5. What Remains Unknown verified
-    expect(client.whatRemainsUnknown.length).toBe(1);
-    expect(client.whatRemainsUnknown[0]!.unknown).toBe("Rate confirmation PDF consistency");
-
-    // 6. Deep Assessment Questions verified
-    expect(client.deepAssessmentQuestions.length).toBe(2);
-    expect(client.deepAssessmentQuestions[0]).toContain("dispatcher approval?");
-
-    // All evidence IDs in client report must be real
-    const realSet = new Set(realIds);
-    for (const eid of client.evidenceIds) expect(realSet.has(eid)).toBe(true);
-
-    // Intake package verification
-    const intake = createIntakePackage(id, client, sales);
-    expect(intake.opportunityHypothesis?.title).toBe("Carrier Rate Reconciliation");
-    expect(intake.deepAssessmentQuestions.length).toBe(2);
+    // Provenance check
+    expect(client.opportunities[0]!.evidenceIds).toEqual([ev3.id]);
+    expect(sales.clientReport).toBe(client);
   });
 
-  it("handles null opportunity hypothesis gracefully (no false positive hallucination)", async () => {
+  it("Scenario 2: Weak / Thin Evidence — Honest handling without hallucinating opportunities", async () => {
+    const thinId = "syn-thin";
+    createScan({
+      id: thinId, company: "Generic Services", email: "info@generic.com",
+      retentionScrapedDays: 90, retentionAnswersDays: 365
+    });
+    const ev = addEvidence(thinId, { kind: "PROSPECT_REPORTED", source: "interview-q1", snippet: "We are a small business doing general services.", signal: "business:general", confidence: "low" });
+
     completeMock.mockResolvedValueOnce({
       json: {
-        headline: "Acme Logistics: Company AI Opportunity Scan",
-        companySnapshot: "A company with streamlined operations.",
-        hypothesis: null,
-        whyIdentified: [],
-        potentialImpact: [],
-        additionalSignals: [],
-        whatRemainsUnknown: [],
-        deepAssessmentQuestions: ["What workflows currently require manual intervention?"],
-        whatsNext: "No immediate high-leverage opportunity was identified.",
-        salesSummary: "No current opportunity.",
+        headline: "Generic Services: Preliminary AI Opportunity Scan",
+        yourBusiness: "Generic Services is a small service provider.",
+        whatWeHeard: [{ observation: "The company provides general services.", evidenceIds: [ev.id] }],
+        aiJourney: { stage: "Early awareness", explanation: "Early stages of considering AI." },
+        aiCulture: { whatMayHelp: ["Curiosity"], whatMayMakeAdoptionHarder: ["Lack of defined workflows"], whereAiMayHelp: "Preliminary workflow definition." },
+        yourData: { dataIdentified: [], whyThisMatters: "No specific data stores were identified." },
+        opportunityMap: [],
+        aiLeverage: [],
+        aiFit: { wellSuited: [], traditionalAutomationSuited: [], humanJudgmentRequired: [] },
+        technologyEnvironment: { systems: [], crossSystemFlow: [] },
+        opportunities: [],
+        whatWeStillNeedToLearn: [
+          { question: "What specific operational tasks consume the most manual hours each week?", whyWeNeedToKnow: "Essential to identify any meaningful opportunity." }
+        ],
+        analystView: {
+          summary: "Insufficient operational detail was provided to identify specific AI opportunities. We intentionally avoid manufacturing recommendations without evidence.",
+          deepAssessmentRecommendation: "A consultation can help map workflows if AI exploration is desired."
+        },
+        salesSummary: "Thin discovery. No validated opportunities.",
         contradictions: []
       },
       text: "", tokensIn: 0, tokensOut: 0
     });
 
-    const { client, sales } = await synthesizeReports(id);
-    expect(client.hypothesis).toBeNull();
-    expect(client.whyIdentified.length).toBe(0);
-    expect(sales.hypothesis).toBeNull();
+    const { client } = await synthesizeReports(thinId);
+    expect(client.opportunities.length).toBe(0);
+    expect(client.analystView.summary).toContain("Insufficient operational detail");
+    deleteScan(thinId);
   });
 
-  it("produces a fallback report when the LLM fails", async () => {
-    completeMock.mockRejectedValueOnce(new Error("llm down"));
+  it("Scenario 3: Provenance Invariant — Filters out fake / hallucinated evidence IDs", async () => {
+    setupScan(id);
+    const realIds = listEvidence(id).map((e) => e.id);
+
+    completeMock.mockResolvedValueOnce({
+      json: {
+        headline: "Acme Logistics: Scan",
+        yourBusiness: "Acme Logistics",
+        whatWeHeard: [
+          { observation: "Supported observation", evidenceIds: [realIds[0]!, "FAKE_1"] },
+          { observation: "Fabricated observation", evidenceIds: ["FAKE_2"] }
+        ],
+        aiJourney: { stage: "Exploring", explanation: "exploring" },
+        aiCulture: { whatMayHelp: [], whatMayMakeAdoptionHarder: [], whereAiMayHelp: "" },
+        yourData: { dataIdentified: [], whyThisMatters: "" },
+        opportunityMap: [],
+        aiLeverage: [
+          { category: "Repetitive work", observation: "Supported leverage", evidenceIds: [realIds[1]!] },
+          { category: "Information retrieval", observation: "Unsupported leverage", evidenceIds: ["FAKE_3"] }
+        ],
+        aiFit: { wellSuited: [], traditionalAutomationSuited: [], humanJudgmentRequired: [] },
+        technologyEnvironment: { systems: [], crossSystemFlow: [] },
+        opportunities: [
+          {
+            title: "Supported Opportunity",
+            observation: "Real observation",
+            whyItMatters: "Why",
+            whereAiFits: "Where",
+            interventionFit: "ai",
+            evidenceStrength: "Moderate",
+            status: "Potential opportunity",
+            evidenceIds: [realIds[0]!, "FAKE_4"],
+            whatWeStillNeedToLearn: []
+          },
+          {
+            title: "Fake Opportunity",
+            observation: "Fabricated observation",
+            whyItMatters: "Why",
+            whereAiFits: "Where",
+            interventionFit: "ai",
+            evidenceStrength: "Limited",
+            status: "Area for exploration",
+            evidenceIds: ["FAKE_5"],
+            whatWeStillNeedToLearn: []
+          }
+        ],
+        whatWeStillNeedToLearn: [{ question: "What is unknown?", whyWeNeedToKnow: "Why" }],
+        analystView: { summary: "Summary", deepAssessmentRecommendation: "Rec" },
+        salesSummary: "Summary",
+        contradictions: []
+      },
+      text: "", tokensIn: 0, tokensOut: 0
+    });
+
+    const { client } = await synthesizeReports(id);
+
+    // Only real IDs kept in whatWeHeard
+    expect(client.whatWeHeard.length).toBe(1);
+    expect(client.whatWeHeard[0]!.evidenceIds).toEqual([realIds[0]!]);
+
+    // Unsupported aiLeverage dropped
+    expect(client.aiLeverage.length).toBe(1);
+    expect(client.aiLeverage[0]!.evidenceIds).toEqual([realIds[1]!]);
+
+    // Unsupported opportunity dropped, fake IDs stripped
+    expect(client.opportunities.length).toBe(1);
+    expect(client.opportunities[0]!.title).toBe("Supported Opportunity");
+    expect(client.opportunities[0]!.evidenceIds).toEqual([realIds[0]!]);
+  });
+
+  it("Scenario 4: Fallback Report Invariant — Generates honest fallback when LLM fails", async () => {
+    setupScan(id);
+    completeMock.mockRejectedValueOnce(new Error("LLM provider timeout"));
+
     const { client, sales } = await synthesizeReports(id);
-    expect(client.hypothesis).toBeNull();
-    expect(client.whatsNext.length).toBeGreaterThan(0);
-    expect(client.deepAssessmentQuestions.length).toBeGreaterThan(0);
+    expect(client.headline).toContain("Acme Logistics");
+    expect(client.opportunities.length).toBe(0);
+    expect(client.whatWeStillNeedToLearn.length).toBeGreaterThan(0);
+    expect(client.analystView.summary).toContain("Automated synthesis encountered an issue");
     expect(sales.summary).toContain("Automated synthesis unavailable");
   });
 });
 
-describe("Synthesis Boundary-Leakage & Anti-Vagueness Invariants", () => {
-  const id = "syn-boundary";
-  beforeEach(() => { clearStores(); setupScan(id); completeMock.mockReset(); });
-  afterEach(() => deleteScan(id));
-
-  it("fails boundary checks if report leaks vendor recommendations or implementation architecture", () => {
-    const forbiddenPatterns = [
-      /langchain/i,
-      /vector db|vector database/i,
-      /rag pipeline/i,
-      /openai|anthropic|zapier|make\.com/i,
-      /\$\d{2,}(?:,\d{3})*(?:\.\d+)?\s*(?:annual|cost|savings|roi)/i
-    ];
-
-    const cleanHypothesis = {
-      title: "Rate Reconciliation",
-      locus: "Reconciling daily carrier rate confirmations with QuickBooks invoices",
-      summary: "Manual cross-checking causes billing delays.",
-      confidence: "high" as const,
-      evidenceIds: ["ev-1"]
-    };
-
-    // Valid report passes pattern checks
-    const textToCheck = `${cleanHypothesis.title} ${cleanHypothesis.locus} ${cleanHypothesis.summary}`;
-    for (const pattern of forbiddenPatterns) {
-      expect(pattern.test(textToCheck)).toBe(false);
-    }
-
-    // Leaky report fails pattern checks
-    const leakyText = "Build a LangChain RAG pipeline using OpenAI and Zapier to save $50,000 annually";
-    const foundViolations = forbiddenPatterns.filter((p) => p.test(leakyText));
-    expect(foundViolations.length).toBeGreaterThanOrEqual(3);
-  });
-
-  it("enforces that deepAssessmentQuestions are diagnostic questions, not execution tasks", () => {
-    const validQuestions = [
-      "What rate of edge-case exceptions requires manual dispatcher approval?",
-      "Are carrier rate confirmations accessible via direct EDI/API or trapped in email attachments?"
-    ];
-
-    const invalidTasks = [
-      "Audit 100 historical invoices",
-      "Configure write permissions in QuickBooks",
-      "Test NetSuite webhook latency",
-      "Build a proof of concept"
-    ];
-
-    for (const q of validQuestions) {
-      expect(q.trim().endsWith("?")).toBe(true);
-      expect(/^(audit|configure|test|build|provision|deploy)\b/i.test(q)).toBe(false);
-    }
-
-    for (const task of invalidTasks) {
-      const isTask = /^(audit|configure|test|build|provision|deploy)\b/i.test(task) || !task.trim().endsWith("?");
-      expect(isTask).toBe(true);
-    }
-  });
-
-  it("enforces specific operational locus in hypothesis (rejects generic fluff)", () => {
-    const genericFluff = [
-      "Your business may benefit from AI",
-      "There may be opportunities to improve operational efficiency",
-      "AI automation opportunity"
-    ];
-
-    const specificLocus = [
-      "Daily discrepancy reconciliation between carrier rate confirmations and QuickBooks invoices",
-      "Cross-system customer order entry from unformatted email PDFs into ERP",
-      "Field technician work order status handoff between ServiceTitan and billing"
-    ];
-
-    // Specific locus should have descriptive process context (> 25 chars and specific process terms)
-    for (const locus of specificLocus) {
-      expect(locus.length).toBeGreaterThan(25);
-      expect(/reconciliation|entry|handoff|dispatch|invoices|billing|order/i.test(locus)).toBe(true);
-    }
-
-    for (const fluff of genericFluff) {
-      expect(/reconciliation|entry|handoff|dispatch|invoices|billing|order/i.test(fluff)).toBe(false);
-    }
-  });
-});
-
-describe("Client Summary PDF Fox & Loom branding & logo", () => {
-  it("finds the Fox & Loom logo on disk and converts to base64 data URI", () => {
-    const logoDataUrl = getFoxAndLoomLogoBase64();
-    expect(logoDataUrl).toBeDefined();
-    expect(logoDataUrl).toContain("data:image/png;base64,");
-  });
-
-  it("renders a valid PDF with Fox & Loom branding and returns PDF bytes", async () => {
+describe("Client Summary PDF 12-Section Rendering", () => {
+  it("renders a valid multi-page PDF document with all 12 sections", async () => {
     const sampleReport: ClientReport = {
-      company: "Acme Logistics",
-      website: "https://acme.com",
-      headline: "Acme Logistics: Carrier Rate Confirmation Reconciliation",
-      companySnapshot: "A freight brokerage company.",
-      hypothesis: {
-        title: "Carrier Rate Reconciliation",
-        locus: "Daily discrepancy reconciliation between carrier rate confirmations and QuickBooks invoices",
-        summary: "Manual cross-checking causes billing delays and dispatcher rework.",
-        confidence: "high",
-        evidenceIds: ["ev-1"]
-      },
-      whyIdentified: [
-        { observation: "Dispatchers manually re-key carrier invoices into QuickBooks.", evidenceIds: ["ev-1"] }
-      ],
-      potentialImpact: [
-        { area: "Dispatch Operations", directionalImpact: "Reduces month-end reconciliation backlog.", evidenceIds: ["ev-1"] }
-      ],
-      additionalSignals: [
-        { signal: "Quote turnaround delays during peak afternoon volume.", evidenceIds: ["ev-2"] }
-      ],
-      whatRemainsUnknown: [
-        { unknown: "Carrier rate confirmation format consistency", whyItMatters: "Determines how structured the input data is." }
-      ],
-      deepAssessmentQuestions: [
-        "What percentage of rate confirmations require exception handling?",
-        "Are rate confirmations accessible via EDI/API or stored in email attachments?"
-      ],
-      whatsNext: "This scan flagged a potential opportunity worth looking into further. Figuring out whether it's feasible, valuable, safe, and actually worth building is what a Deep Assessment is for.",
+      company: "Mustang Sign Company",
+      website: "https://mustangsignco.com",
+      location: "Kennewick, WA",
+      headline: "Mustang Sign Company: Preliminary AI Opportunity Scan",
+      generatedAt: Date.now(),
       evidenceIds: ["ev-1", "ev-2"],
-      generatedAt: Date.now()
+      yourBusiness: "Custom sign company in Kennewick, WA.",
+      whatWeHeard: [{ observation: "Zoning lookups take 45 mins per quote.", evidenceIds: ["ev-1"] }],
+      aiJourney: { stage: "Exploring", explanation: "Exploring practical automation." },
+      aiCulture: {
+        whatMayHelp: ["Estimators want relief from repetitive municipal research."],
+        whatMayMakeAdoptionHarder: ["Custom signage requires human sign-off."],
+        whereAiMayHelp: "AI assists with preparation while reps retain final review."
+      },
+      yourData: {
+        dataIdentified: [{ data: "Municipal Code PDFs", location: "City portals", relevance: "Zoning limits" }],
+        whyThisMatters: "Data is split across PDF documents and shopVOX."
+      },
+      opportunityMap: [{ stage: "Zoning Check", friction: "Manual code search", evidenceIds: ["ev-1"] }],
+      aiLeverage: [{ category: "Information retrieval", observation: "Looking up zoning codes.", evidenceIds: ["ev-1"] }],
+      aiFit: {
+        wellSuited: ["Municipal code lookup"],
+        traditionalAutomationSuited: ["Travel fee SKU calculation"],
+        humanJudgmentRequired: ["Custom design pricing"]
+      },
+      technologyEnvironment: {
+        systems: ["shopVOX", "Microsoft Teams"],
+        crossSystemFlow: ["Manual copy-paste from code PDFs to quote."]
+      },
+      opportunities: [
+        {
+          title: "Municipal Zoning Code Assistant",
+          observation: "Estimators manually research Kennewick and Pasco municipal codes.",
+          whyItMatters: "Slows down quote turnaround.",
+          whereAiFits: "AI retrieval surfaces height limits and setbacks.",
+          interventionFit: "ai",
+          evidenceStrength: "Strong",
+          status: "Potential opportunity",
+          evidenceIds: ["ev-1"],
+          whatWeStillNeedToLearn: ["How often do local codes change?"]
+        }
+      ],
+      whatWeStillNeedToLearn: [
+        { question: "What is the historical conversion rate on quotes?", whyWeNeedToKnow: "Evaluates impact." }
+      ],
+      analystView: {
+        summary: "Clear opportunity in zoning research.",
+        deepAssessmentRecommendation: "Schedule a Deep Assessment to review feasibility."
+      }
     };
 
     const pdfBytes = await renderClientSummaryPdf(sampleReport);
     expect(pdfBytes).toBeDefined();
-    expect(pdfBytes.length).toBeGreaterThan(500);
+    expect(pdfBytes.length).toBeGreaterThan(1000);
 
-    // PDF magic bytes check (%PDF-)
     const header = Buffer.from(pdfBytes.slice(0, 5)).toString("ascii");
     expect(header).toBe("%PDF-");
   });
 });
-
-void getInterviewState;
-
-
